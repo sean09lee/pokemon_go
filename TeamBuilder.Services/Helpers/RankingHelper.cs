@@ -40,6 +40,9 @@ internal static class RankingHelper
 
         IList<RankedPokemon> results = rankedOwned
             .OrderBy(x => x.Rank)
+            .ThenByDescending(x => x.Owned.IvAvg ?? int.MinValue)
+            .ThenByDescending(x => x.Owned.AtkIV ?? int.MinValue)
+            .ThenByDescending(x => IsLucky(x.Owned))
             .ThenByDescending(x => x.Owned.CP ?? int.MinValue)
             .Take(6)
             .Select(x => new RankedPokemon
@@ -85,7 +88,10 @@ internal static class RankingHelper
             {
                 var evolvedOwned = ownedList
                     .Where(x => x.PokemonNumber == evolutionNumber)
-                    .OrderByDescending(x => x.CP ?? int.MinValue)
+                    .OrderByDescending(x => x.IvAvg ?? int.MinValue)
+                    .ThenByDescending(x => x.AtkIV ?? int.MinValue)
+                    .ThenByDescending(x => IsLucky(x))
+                    .ThenByDescending(x => x.CP ?? int.MinValue)
                     .FirstOrDefault();
 
                 var preferredForm = evolvedOwned?.Form;
@@ -98,7 +104,11 @@ internal static class RankingHelper
         }
 
         var best = candidates
-            .OrderBy(x => x.Ranked.Rank ?? int.MaxValue)
+            .OrderByDescending(x => (x.OwnedEvolution ?? owned).IvAvg ?? int.MinValue)
+            .ThenByDescending(x => (x.OwnedEvolution ?? owned).AtkIV ?? int.MinValue)
+            .ThenByDescending(x => IsLucky(x.OwnedEvolution ?? owned))
+            .ThenByDescending(x => (x.OwnedEvolution ?? owned).CP ?? int.MinValue)
+            .ThenBy(x => x.Ranked.Rank ?? int.MaxValue)
             .FirstOrDefault();
 
         if (best.Ranked is null)
@@ -193,4 +203,6 @@ internal static class RankingHelper
 
         return form.Trim().ToLowerInvariant();
     }
+
+    private static int IsLucky(Pokemon pokemon) => pokemon.Lucky.GetValueOrDefault() > 0 ? 1 : 0;
 }
