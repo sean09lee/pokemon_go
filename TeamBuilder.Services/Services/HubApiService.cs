@@ -1,6 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Globalization;
 using Microsoft.Playwright;
 using TeamBuilder.Data.Models;
 using TeamBuilder.Data.Responses;
@@ -66,7 +67,7 @@ public class HubApiService(HttpClient httpClient)
     };
   }
 
-  public async Task<IList<HubRankedPokemon>> CrawlBestPerTypeAsync(string attackerType, int limit = 200, CancellationToken cancellationToken = default)
+  public static async Task<IList<HubRankedPokemon>> CrawlBestPerTypeAsync(string attackerType, int limit = 200, CancellationToken cancellationToken = default)
   {
     attackerType = attackerType.Trim().ToLowerInvariant();
     var url = $"https://db.pokemongohub.net/pokemon-list/best-per-type/{attackerType}";
@@ -286,9 +287,17 @@ public class HubApiService(HttpClient httpClient)
       }
 
       var rowText = string.Join(" | ", cells);
-      var anchor = row.Locator("a").First;
-      var hasAnchor = await anchor.CountAsync() > 0;
-      var anchorText = hasAnchor ? await anchor.InnerTextAsync() : null;
+      var pokemonAnchor = row.Locator("a[href*='/pokemon/']").First;
+      var hasPokemonAnchor = await pokemonAnchor.CountAsync() > 0;
+      var anchorText = hasPokemonAnchor ? await pokemonAnchor.InnerTextAsync() : null;
+      var anchorHref = hasPokemonAnchor ? await pokemonAnchor.GetAttributeAsync("href") : null;
+
+      var identity = ParsePokemonIdentityFromHref(anchorHref);
+      if (identity is null)
+      {
+        continue;
+      }
+
       var name = !string.IsNullOrWhiteSpace(anchorText)
         ? anchorText.Trim()
         : GetCellByHeader(headers, cells, "pokemon", "name") ?? GuessName(cells);
@@ -298,22 +307,34 @@ public class HubApiService(HttpClient httpClient)
         continue;
       }
 
-      var pokemonNumber = ParseInt(GetCellByHeader(headers, cells, "#", "dex", "id", "number"))
-        ?? ParseDexFromText(rowText);
+      var pokemonNumber = identity.Value.Number;
 
-      var rank = ParseInt(GetCellByHeader(headers, cells, "rank", "#")) ?? (i + 1);
-      var form = GetCellByHeader(headers, cells, "form") ?? GuessForm(name, rowText);
-      var cp = ParseInt(GetCellByHeader(headers, cells, "cp"));
-      var hp = ParseInt(GetCellByHeader(headers, cells, "hp"));
+      var rank = ParseInt(GetCellByHeader(headers, cells, "rank"))
+        ?? ParseInt(cells.FirstOrDefault())
+        ?? (i + 1);
+      var form = identity.Value.Form;
+      var fastAttack = GetCellByHeader(headers, cells, "fast", "quick")
+        ?? GetCellByPosition(cells, 2);
+      var chargedAttack = GetCellByHeader(headers, cells, "charged")
+        ?? GetCellByPosition(cells, 3);
+      var dps = ParseDouble(GetCellByExactHeader(headers, cells, "dps"))
+        ?? ParseDouble(GetCellByPosition(cells, 4));
+      var tdo = ParseDouble(GetCellByExactHeader(headers, cells, "tdo"))
+        ?? ParseDouble(GetCellByPosition(cells, 5));
+      var score = ParseDouble(GetCellByExactHeader(headers, cells, "score"))
+        ?? ParseDouble(GetCellByPosition(cells, 6));
 
       results.Add(new HubRankedPokemon
       {
-        Index = rank,
+        Rank = rank,
         Name = CleanName(name),
         Form = form,
         PokemonNumber = pokemonNumber,
-        CP = cp,
-        HP = hp
+        FastAttack = fastAttack,
+        ChargedAttack = chargedAttack,
+        DPS = dps,
+        TDO = tdo,
+        Score = score
       });
     }
 
@@ -354,6 +375,30 @@ public class HubApiService(HttpClient httpClient)
     }
 
     return null;
+  }
+
+  private static string? GetCellByExactHeader(IReadOnlyList<string> headers, IReadOnlyList<string> cells, string headerName)
+  {
+    for (var i = 0; i < headers.Count && i < cells.Count; i++)
+    {
+      if (string.Equals(headers[i].Trim(), headerName, StringComparison.OrdinalIgnoreCase))
+      {
+        return cells[i];
+      }
+    }
+
+    return null;
+  }
+
+  private static string? GetCellByPosition(IReadOnlyList<string> cells, int index)
+  {
+    if (index < 0 || index >= cells.Count)
+    {
+      return null;
+    }
+
+    var value = cells[index]?.Trim();
+    return string.IsNullOrWhiteSpace(value) ? null : value;
   }
 
   private static string? GuessName(IReadOnlyList<string> cells)
@@ -399,6 +444,46 @@ public class HubApiService(HttpClient httpClient)
     return int.TryParse(match.Groups[1].Value, out var parsed) ? parsed : null;
   }
 
+  private static (int Number, string Form)? ParsePokemonIdentityFromHref(string? href)
+  {
+    if (string.IsNullOrWhiteSpace(href))
+    {
+      return null;
+    }
+
+    var match = Regex.Match(href, @"/pokemon/(?<num>\d{1,4})(?:-(?<form>[a-z0-9-]+))?$", RegexOptions.IgnoreCase);
+    if (!match.Success)
+    {
+      return null;
+    }
+
+    if (!int.TryParse(match.Groups["num"].Value, out var parsed))
+    {
+      return null;
+    }
+
+    var formSlug = match.Groups["form"].Success
+      ? match.Groups["form"].Value
+      : "normal";
+
+    return (parsed, SlugToTitleCase(formSlug));
+  }
+
+  private static string SlugToTitleCase(string slug)
+  {
+    if (string.IsNullOrWhiteSpace(slug))
+    {
+      return "Normal";
+    }
+
+    var words = slug
+      .Split('-', StringSplitOptions.RemoveEmptyEntries)
+      .Select(x => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(x.ToLowerInvariant()));
+
+    var combined = string.Join(' ', words);
+    return string.IsNullOrWhiteSpace(combined) ? "Normal" : combined;
+  }
+
   private static int? ParseInt(string? value)
   {
     if (string.IsNullOrWhiteSpace(value))
@@ -408,6 +493,25 @@ public class HubApiService(HttpClient httpClient)
 
     var digits = Regex.Match(value, @"-?\d+");
     return digits.Success && int.TryParse(digits.Value, out var parsed)
+      ? parsed
+      : null;
+  }
+
+  private static double? ParseDouble(string? value)
+  {
+    if (string.IsNullOrWhiteSpace(value))
+    {
+      return null;
+    }
+
+    var match = Regex.Match(value, @"-?\d+(?:[\.,]\d+)?");
+    if (!match.Success)
+    {
+      return null;
+    }
+
+    var normalized = match.Value.Replace(',', '.');
+    return double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
       ? parsed
       : null;
   }

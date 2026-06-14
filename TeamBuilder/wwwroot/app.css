@@ -1,9 +1,11 @@
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background-color: #1f2328;
+    color: #e6e6e6;
 }
 
 a, .btn-link {
-    color: #006bb7;
+    color: #9fd0ff;
 }
 
 .btn-primary {
@@ -18,6 +20,42 @@ a, .btn-link {
 
 .content {
     padding-top: 1.1rem;
+}
+
+h1, h2, h3, h4, h5, h6,
+p,
+label,
+small,
+th,
+td {
+    color: inherit;
+}
+
+.table {
+    --bs-table-color: #e6e6e6;
+    --bs-table-bg: #2a3038;
+    --bs-table-border-color: #3a414a;
+    --bs-table-striped-color: #e6e6e6;
+    --bs-table-striped-bg: #252b33;
+    --bs-table-hover-color: #ffffff;
+    --bs-table-hover-bg: #343b45;
+}
+
+.form-control,
+.form-select {
+    background-color: #2a3038;
+    color: #e6e6e6;
+    border-color: #3a414a;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: #2a3038;
+    color: #e6e6e6;
+}
+
+.text-muted {
+    color: #aeb6bf !important;
 }
 
 h1:focus {

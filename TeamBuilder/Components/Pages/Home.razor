@@ -32,6 +32,65 @@
 	<div class="alert alert-warning" role="alert">@_hubErrorMessage</div>
 }
 
+<div class="d-flex gap-2 align-items-center mb-3">
+	<button class="btn btn-outline-primary" @onclick="LoadAllTierListsAsync" disabled="@_isTierLoading">
+		@(_isTierLoading ? "Loading tier lists..." : "Load all Hub tier lists")
+	</button>
+</div>
+
+@if (_isTierLoading || _tierProgressPercent > 0)
+{
+	<div class="mb-3" aria-live="polite">
+		<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@_tierProgressPercent">
+			<div class="progress-bar @(_isTierLoading ? "progress-bar-striped progress-bar-animated" : string.Empty)"
+				 style="width: @_tierProgressPercent%;">@_tierProgressPercent%</div>
+		</div>
+		<small class="text-muted">@_tierProgressMessage</small>
+	</div>
+}
+
+@if (_allTierRows.Count > 0)
+{
+	<h2>All Hub Tier Lists</h2>
+	<p class="text-muted">Loaded @_allTierRows.Count ranked entries across all attacker types.</p>
+
+	<div class="table-responsive mb-4">
+		<table class="table table-striped table-sm">
+			<thead>
+				<tr>
+					<th>Attacker Type</th>
+					<th>Rank</th>
+					<th>#</th>
+					<th>Name</th>
+					<th>Form</th>
+					<th>Fast Attack</th>
+					<th>Charged Attack</th>
+					<th>DPS</th>
+					<th>TDO</th>
+					<th>Score</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var row in _allTierRows)
+				{
+					<tr>
+						<td>@row.AttackerType</td>
+						<td>@row.Pokemon.Rank</td>
+						<td>@row.Pokemon.PokemonNumber</td>
+						<td>@row.Pokemon.Name</td>
+						<td>@row.Pokemon.Form</td>
+						<td>@row.Pokemon.FastAttack</td>
+						<td>@row.Pokemon.ChargedAttack</td>
+						<td>@row.Pokemon.DPS</td>
+						<td>@row.Pokemon.TDO</td>
+						<td>@row.Pokemon.Score</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
 @if (_validationFailures.Count > 0)
 {
 	<div class="alert alert-warning" role="alert">
@@ -151,10 +210,86 @@
 	private readonly List<Pokemon> _pokemon = [];
 	private readonly List<CsvValidationFailure> _validationFailures = [];
 	private readonly List<PokemonTierFit> _tierFits = [];
+	private readonly List<HubTierRow> _allTierRows = [];
+	private static readonly string[] _attackerTypes =
+	[
+		"normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison",
+		"ground", "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark",
+		"steel", "fairy"
+	];
 	private string? _uploadedFileName;
 	private string? _errorMessage;
 	private string? _hubErrorMessage;
+	private string _tierProgressMessage = "Idle";
 	private bool _isLoading;
+	private bool _isTierLoading;
+	private int _tierProgressPercent;
+
+	private sealed class HubTierRow
+	{
+		public required string AttackerType { get; init; }
+		public required HubRankedPokemon Pokemon { get; init; }
+	}
+
+	private async Task LoadAllTierListsAsync()
+	{
+		_hubErrorMessage = null;
+
+		try
+		{
+			_isTierLoading = true;
+			_tierProgressPercent = 0;
+			_tierProgressMessage = "Preparing Hub tier list crawl...";
+			_allTierRows.Clear();
+			await InvokeAsync(StateHasChanged);
+
+			for (var i = 0; i < _attackerTypes.Length; i++)
+			{
+				var attackerType = _attackerTypes[i];
+				_tierProgressMessage = $"Processing '{attackerType}' tier list ({i + 1}/{_attackerTypes.Length})...";
+				await InvokeAsync(StateHasChanged);
+
+				var tierList = await HubApiService.CrawlBestPerTypeAsync(attackerType, 200);
+				AddTierRows(attackerType, tierList);
+
+				_tierProgressPercent = (int)Math.Round(((i + 1d) / _attackerTypes.Length) * 100d);
+			}
+
+			_tierProgressMessage = "Completed all tier lists.";
+
+			_allTierRows.Sort((a, b) =>
+			{
+				var typeCompare = string.Compare(a.AttackerType, b.AttackerType, StringComparison.OrdinalIgnoreCase);
+				if (typeCompare != 0)
+				{
+					return typeCompare;
+				}
+
+				return (a.Pokemon.Rank ?? int.MaxValue).CompareTo(b.Pokemon.Rank ?? int.MaxValue);
+			});
+		}
+		catch (Exception ex)
+		{
+			_hubErrorMessage = $"Failed to load Hub tier lists: {ex.Message}";
+			_tierProgressMessage = "Stopped due to an error.";
+		}
+		finally
+		{
+			_isTierLoading = false;
+		}
+	}
+
+	private void AddTierRows(string attackerType, IEnumerable<HubRankedPokemon> tierList)
+	{
+		foreach (var pokemon in tierList)
+		{
+			_allTierRows.Add(new HubTierRow
+			{
+				AttackerType = attackerType,
+				Pokemon = pokemon
+			});
+		}
+	}
 
 	private async Task OnCsvSelected(InputFileChangeEventArgs e)
 	{

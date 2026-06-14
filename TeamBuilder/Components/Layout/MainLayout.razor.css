@@ -1,30 +1,36 @@
 .page {
-    position: relative;
     display: flex;
     flex-direction: column;
+    min-height: 100vh;
+    background-color: #1f2328;
+    color: #e6e6e6;
 }
 
 main {
     flex: 1;
 }
 
-.sidebar {
-    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
-}
-
 .top-row {
-    background-color: #f7f7f7;
-    border-bottom: 1px solid #d6d5d5;
-    justify-content: flex-end;
+    background-color: #262b31;
+    border-bottom: 1px solid #3a414a;
+    justify-content: space-between;
     height: 3.5rem;
     display: flex;
     align-items: center;
+    color: #f2f2f2;
+}
+
+.app-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
 }
 
     .top-row ::deep a, .top-row ::deep .btn-link {
         white-space: nowrap;
         margin-left: 1.5rem;
         text-decoration: none;
+        color: #9fd0ff;
     }
 
     .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
@@ -47,21 +53,10 @@ main {
 }
 
 @media (min-width: 641px) {
-    .page {
-        flex-direction: row;
-    }
-
-    .sidebar {
-        width: 250px;
-        height: 100vh;
-        position: sticky;
-        top: 0;
-    }
-
     .top-row {
         position: sticky;
         top: 0;
-        z-index: 1;
+        z-index: 10;
     }
 
     .top-row.auth ::deep a:first-child {
