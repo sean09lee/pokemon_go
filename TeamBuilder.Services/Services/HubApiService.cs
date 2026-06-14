@@ -7,11 +7,21 @@ namespace TeamBuilder.Services.Services;
 /// <summary>
 /// This service hits the pokemon go hub api to get tier list data
 /// </summary>
-public class HubApiService
+public class HubApiService(CacheService cacheService)
 {
-  public static async Task<IList<HubRankedPokemon>> CrawlBestPerTypeAsync(string attackerType, int limit = 200, CancellationToken cancellationToken = default)
+  private readonly CacheService _cacheService = cacheService;
+
+  public async Task<IList<HubRankedPokemon>> CrawlBestPerTypeAsync(string attackerType, int limit = 200, CancellationToken cancellationToken = default)
   {
     attackerType = attackerType.Trim().ToLowerInvariant();
+    var cacheKey = $"hub-best-per-type-{attackerType}-{limit}";
+
+    var cached = await _cacheService.TryGetAsync<List<HubRankedPokemon>>(cacheKey, cancellationToken);
+    if (cached is not null && cached.Count > 0)
+    {
+      return cached;
+    }
+
     var url = $"https://db.pokemongohub.net/pokemon-list/best-per-type/{attackerType}";
 
     using var playwright = await Playwright.CreateAsync();
@@ -37,10 +47,14 @@ public class HubApiService
 
     var pokemon = await HubHelpers.ExtractRankedPokemonAsync(page, limit, cancellationToken);
 
-    return pokemon
+    var ranked = pokemon
       .GroupBy(x => $"{x.PokemonNumber}|{x.Name}|{x.Form}")
       .Select(x => x.First())
       .Take(limit)
       .ToList();
+
+    await _cacheService.SaveAsync(cacheKey, ranked, cancellationToken);
+
+    return ranked;
   }
 }

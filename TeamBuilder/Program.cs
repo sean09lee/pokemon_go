@@ -9,6 +9,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddScoped<CsvParserService>();
 builder.Services.AddScoped<RankingService>();
+builder.Services.AddSingleton<CacheService>();
 builder.Services.AddScoped<HubApiService>();
 builder.Services.AddScoped<PogoApiService>();
 builder.Services.AddHttpClient<PogoHelpers>(client =>
