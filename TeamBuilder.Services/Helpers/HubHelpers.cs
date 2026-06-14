@@ -13,34 +13,70 @@ internal class HubHelpers
         var optionValue = limit.ToString();
         var selectors = new[]
         {
+            "select[class*='DataGrid_paginationControl']",
+            "select.DataGrid_paginationControl__fVEx5",
             "select[name='DataTables_Table_0_length']",
             "select[name$='_length']",
             "select"
         };
 
+        var previousRowCount = await page.Locator("table tbody tr").CountAsync();
+
         foreach (var selector in selectors)
         {
-            var select = page.Locator(selector).First;
-            if (await select.CountAsync() == 0)
+            var selectCandidates = page.Locator(selector);
+            var candidateCount = await selectCandidates.CountAsync();
+            if (candidateCount == 0)
             {
                 continue;
             }
 
-            try
+            for (var i = 0; i < candidateCount; i++)
             {
-                var options = await select.Locator("option").AllTextContentsAsync();
-                if (!options.Any(x => x.Trim() == optionValue))
-                {
-                    continue;
-                }
+                var select = selectCandidates.Nth(i);
 
-                await select.SelectOptionAsync(new SelectOptionValue { Value = optionValue });
-                await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-                return;
-            }
-            catch
-            {
-                // keep trying with next candidate selector
+                try
+                {
+                    var optionWithValue = select.Locator($"option[value='{optionValue}']");
+                    var hasValueOption = await optionWithValue.CountAsync() > 0;
+                    var options = await select.Locator("option").AllTextContentsAsync();
+                    var hasTextOption = options.Any(x => x.Trim().EndsWith(optionValue, StringComparison.Ordinal));
+                    if (!hasValueOption && !hasTextOption)
+                    {
+                        continue;
+                    }
+
+                    if (hasValueOption)
+                    {
+                        await select.SelectOptionAsync(new SelectOptionValue { Value = optionValue });
+                    }
+                    else
+                    {
+                        await select.SelectOptionAsync(new SelectOptionValue { Label = $"Show {optionValue}" });
+                    }
+
+                    await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+                    try
+                    {
+                        await page.WaitForFunctionAsync(
+                            "(prev) => document.querySelectorAll('table tbody tr').length !== prev",
+                            previousRowCount,
+                            new PageWaitForFunctionOptions { Timeout = 8000 });
+                    }
+                    catch
+                    {
+                        // table may already be fully loaded or unchanged; continue
+                    }
+
+                    await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+                    await page.WaitForTimeoutAsync(500);
+                    return;
+                }
+                catch
+                {
+                    // keep trying next candidate select
+                }
             }
         }
     }
