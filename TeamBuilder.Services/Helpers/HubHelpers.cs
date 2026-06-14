@@ -1,11 +1,282 @@
 ﻿using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.Playwright;
 using TeamBuilder.Data.Models;
 
 namespace TeamBuilder.Services.Helpers;
 
 internal class HubHelpers
 {
+    internal static async Task SetRowsLimitAsync(IPage page, int limit)
+    {
+        var optionValue = limit.ToString();
+        var selectors = new[]
+        {
+            "select[name='DataTables_Table_0_length']",
+            "select[name$='_length']",
+            "select"
+        };
+
+        foreach (var selector in selectors)
+        {
+            var select = page.Locator(selector).First;
+            if (await select.CountAsync() == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var options = await select.Locator("option").AllTextContentsAsync();
+                if (!options.Any(x => x.Trim() == optionValue))
+                {
+                    continue;
+                }
+
+                await select.SelectOptionAsync(new SelectOptionValue { Value = optionValue });
+                await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+                return;
+            }
+            catch
+            {
+                // keep trying with next candidate selector
+            }
+        }
+    }
+
+    internal static async Task<List<HubRankedPokemon>> ExtractRankedPokemonAsync(IPage page, int limit, CancellationToken cancellationToken)
+    {
+        var results = new List<HubRankedPokemon>();
+
+        var table = await FindLargestTableAsync(page);
+        if (table is null)
+        {
+            return results;
+        }
+
+        var headers = (await table.Locator("thead th").AllTextContentsAsync())
+            .Select(x => x.Trim())
+            .ToList();
+
+        var rows = table.Locator("tbody tr");
+        var rowCount = await rows.CountAsync();
+
+        for (var i = 0; i < rowCount && results.Count < limit; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var row = rows.Nth(i);
+            var cellLocator = row.Locator("td");
+            var cellCount = await cellLocator.CountAsync();
+            if (cellCount == 0)
+            {
+                continue;
+            }
+
+            var cells = new List<string>(cellCount);
+            for (var c = 0; c < cellCount; c++)
+            {
+                var text = await cellLocator.Nth(c).InnerTextAsync();
+                cells.Add(text.Trim());
+            }
+
+            var pokemonAnchor = row.Locator("a[href*='/pokemon/']").First;
+            var hasPokemonAnchor = await pokemonAnchor.CountAsync() > 0;
+            var anchorText = hasPokemonAnchor ? await pokemonAnchor.InnerTextAsync() : null;
+            var anchorHref = hasPokemonAnchor ? await pokemonAnchor.GetAttributeAsync("href") : null;
+
+            var identity = ParsePokemonIdentityFromHref(anchorHref);
+            if (identity is null)
+            {
+                continue;
+            }
+
+            var name = !string.IsNullOrWhiteSpace(anchorText)
+                ? anchorText.Trim()
+                : GetCellByHeader(headers, cells, "pokemon", "name") ?? GuessName(cells);
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            var pokemonNumber = identity.Value.Number;
+
+            var rank = ParseInt(GetCellByHeader(headers, cells, "rank"))
+                ?? ParseInt(cells.FirstOrDefault())
+                ?? (i + 1);
+            var form = identity.Value.Form;
+            var fastAttack = GetCellByHeader(headers, cells, "fast", "quick")
+                ?? GetCellByPosition(cells, 2);
+            var chargedAttack = GetCellByHeader(headers, cells, "charged")
+                ?? GetCellByPosition(cells, 3);
+            var dps = ParseDouble(GetCellByExactHeader(headers, cells, "dps"))
+                ?? ParseDouble(GetCellByPosition(cells, 4));
+            var tdo = ParseDouble(GetCellByExactHeader(headers, cells, "tdo"))
+                ?? ParseDouble(GetCellByPosition(cells, 5));
+            var score = ParseDouble(GetCellByExactHeader(headers, cells, "score"))
+                ?? ParseDouble(GetCellByPosition(cells, 6));
+
+            results.Add(new HubRankedPokemon
+            {
+                Rank = rank,
+                Name = CleanName(name),
+                Form = form,
+                PokemonNumber = pokemonNumber,
+                FastAttack = fastAttack,
+                ChargedAttack = chargedAttack,
+                DPS = dps,
+                TDO = tdo,
+                Score = score
+            });
+        }
+
+        return results;
+    }
+
+    internal static async Task<ILocator?> FindLargestTableAsync(IPage page)
+    {
+        var tables = page.Locator("table");
+        var tableCount = await tables.CountAsync();
+
+        ILocator? selected = null;
+        var maxRows = -1;
+
+        for (var i = 0; i < tableCount; i++)
+        {
+            var table = tables.Nth(i);
+            var rows = await table.Locator("tbody tr").CountAsync();
+            if (rows > maxRows)
+            {
+                maxRows = rows;
+                selected = table;
+            }
+        }
+
+        return selected;
+    }
+
+    internal static string? GetCellByHeader(IReadOnlyList<string> headers, IReadOnlyList<string> cells, params string[] headerContains)
+    {
+        for (var i = 0; i < headers.Count && i < cells.Count; i++)
+        {
+            var header = headers[i].ToLowerInvariant();
+            if (headerContains.Any(h => header.Contains(h, StringComparison.OrdinalIgnoreCase)))
+            {
+                return cells[i];
+            }
+        }
+
+        return null;
+    }
+
+    internal static string? GetCellByExactHeader(IReadOnlyList<string> headers, IReadOnlyList<string> cells, string headerName)
+    {
+        for (var i = 0; i < headers.Count && i < cells.Count; i++)
+        {
+            if (string.Equals(headers[i].Trim(), headerName, StringComparison.OrdinalIgnoreCase))
+            {
+                return cells[i];
+            }
+        }
+
+        return null;
+    }
+
+    internal static string? GetCellByPosition(IReadOnlyList<string> cells, int index)
+    {
+        if (index < 0 || index >= cells.Count)
+        {
+            return null;
+        }
+
+        var value = cells[index]?.Trim();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    internal static string? GuessName(IReadOnlyList<string> cells)
+    {
+        return cells.FirstOrDefault(x => x.Any(char.IsLetter) && x.Length > 1 && !x.Contains('%') && !x.Contains("CP", StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static string CleanName(string name)
+    {
+        return Regex.Replace(name, @"\s*\([^)]*\)\s*", string.Empty).Trim();
+    }
+
+    internal static (int Number, string Form)? ParsePokemonIdentityFromHref(string? href)
+    {
+        if (string.IsNullOrWhiteSpace(href))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(href, @"/pokemon/(?<num>\d{1,4})(?:-(?<form>[a-z0-9-]+))?$", RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        if (!int.TryParse(match.Groups["num"].Value, out var parsed))
+        {
+            return null;
+        }
+
+        var formSlug = match.Groups["form"].Success
+            ? match.Groups["form"].Value
+            : "normal";
+
+        return (parsed, SlugToTitleCase(formSlug));
+    }
+
+    internal static string SlugToTitleCase(string slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            return "Normal";
+        }
+
+        var words = slug
+            .Split('-', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(x.ToLowerInvariant()));
+
+        var combined = string.Join(' ', words);
+        return string.IsNullOrWhiteSpace(combined) ? "Normal" : combined;
+    }
+
+    internal static int? ParseInt(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var digits = Regex.Match(value, @"-?\d+");
+        return digits.Success && int.TryParse(digits.Value, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    internal static double? ParseDouble(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(value, @"-?\d+(?:[\.,]\d+)?");
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var normalized = match.Value.Replace(',', '.');
+        return double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
     internal static List<HubCounterEntry> ExtractCounterEntries(string rawJson)
     {
         var entries = new List<HubCounterEntry>();

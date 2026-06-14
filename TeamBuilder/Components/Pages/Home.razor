@@ -5,6 +5,7 @@
 @using TeamBuilder.Data.Responses
 @inject CsvParserService CsvParserService
 @inject HubApiService HubApiService
+@inject RankingService RankingService
 
 <PageTitle>Home</PageTitle>
 
@@ -34,7 +35,7 @@
 
 @if (_isTierLoading || _tierProgressPercent > 0)
 {
-	<div class="mb-3" aria-live="polite">
+	<div class="mb-3 w-50" aria-live="polite">
 		<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@_tierProgressPercent">
 			<div class="progress-bar @(_isTierLoading ? "progress-bar-striped progress-bar-animated" : string.Empty)"
 				 style="width: @_tierProgressPercent%;">@_tierProgressPercent%</div>
@@ -237,11 +238,6 @@
 		public required IList<RankedPokemon> Team { get; init; }
 	}
 
-	private async Task LoadAllTierListsButtonAsync()
-	{
-		_ = await LoadAllTierListsAsync();
-	}
-
 	private async Task<HubRankingResponse?> LoadAllTierListsAsync()
 	{
 		_hubErrorMessage = null;
@@ -364,7 +360,7 @@
 			{
 				return;
 			}
-			_rankingResponse = BuildRankingResponse(_pokemon, hubRanking);
+			_rankingResponse = RankingService.BuildRankingResponse(_pokemon, hubRanking);
 
 			if (!GetRaidTeamSections().Any(x => x.Team.Count > 0))
 			{
@@ -404,95 +400,6 @@
 			new RaidTeamSection { Label = "Steel", Team = _rankingResponse.SteelRaidTeam },
 			new RaidTeamSection { Label = "Fairy", Team = _rankingResponse.FairyRaidTeam }
 		];
-	}
-
-	private static RankingResponse BuildRankingResponse(IEnumerable<Pokemon> ownedPokemon, HubRankingResponse hubRanking)
-	{
-		return new RankingResponse
-		{
-			NormalRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.NormalTierList),
-			FireRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.FireTierList),
-			WaterRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.WaterTierList),
-			ElectricRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.ElectricTierList),
-			GrassRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.GrassTierList),
-			IceRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.IceTierList),
-			FightingRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.FightingTierList),
-			PoisonRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.PoisonTierList),
-			GroundRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.GroundTierList),
-			FlyingRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.FlyingTierList),
-			PsychicRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.PsychicTierList),
-			BugRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.BugTierList),
-			RockRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.RockTierList),
-			GhostRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.GhostTierList),
-			DragonRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.DragonTierList),
-			DarkRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.DarkTierList),
-			SteelRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.SteelTierList),
-			FairyRaidTeam = BuildTopRaidTeam(ownedPokemon, hubRanking.FairyTierList)
-		};
-	}
-
-	private static IList<RankedPokemon> BuildTopRaidTeam(IEnumerable<Pokemon> ownedPokemon, IEnumerable<HubRankedPokemon> tierList)
-	{
-		var byNumber = tierList
-			.Where(x => x.PokemonNumber is not null)
-			.GroupBy(x => x.PokemonNumber!.Value)
-			.ToDictionary(x => x.Key, x => x.ToList());
-
-		var rankedOwned = new List<(Pokemon Owned, int Rank)>();
-
-		foreach (var owned in ownedPokemon)
-		{
-			if (owned.PokemonNumber is null)
-			{
-				continue;
-			}
-
-			if (!byNumber.TryGetValue(owned.PokemonNumber.Value, out var candidates))
-			{
-				continue;
-			}
-
-			var ownedForm = NormalizeForm(owned.Form);
-			var exact = candidates
-				.Where(x => NormalizeForm(x.Form) == ownedForm)
-				.OrderBy(x => x.Rank ?? int.MaxValue)
-				.FirstOrDefault();
-
-			var matched = exact
-				?? candidates.OrderBy(x => x.Rank ?? int.MaxValue).FirstOrDefault();
-
-			if (matched is null)
-			{
-				continue;
-			}
-
-			rankedOwned.Add((owned, matched.Rank ?? int.MaxValue));
-		}
-
-		return rankedOwned
-			.OrderBy(x => x.Rank)
-			.ThenByDescending(x => x.Owned.CP ?? int.MinValue)
-			.Take(6)
-			.Select(x => new RankedPokemon
-			{
-				Index = x.Owned.Index,
-				Name = x.Owned.Name,
-				Form = x.Owned.Form,
-				PokemonNumber = x.Owned.PokemonNumber,
-				CP = x.Owned.CP,
-				HP = x.Owned.HP
-			})
-			.ToList();
-	}
-
-	private static string NormalizeForm(string? form)
-	{
-		if (string.IsNullOrWhiteSpace(form))
-		{
-			return "normal";
-		}
-
-		return form.Trim().ToLowerInvariant();
 	}
 
 }

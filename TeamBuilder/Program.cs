@@ -7,10 +7,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddScoped<CsvParserService>();
-builder.Services.AddHttpClient<HubApiService>(client =>
-{
-    client.BaseAddress = new Uri("https://db.pokemongohub.net/");
-});
+builder.Services.AddScoped<RankingService>();
+builder.Services.AddScoped<HubApiService>();
 
 var app = builder.Build();
 
