@@ -46,46 +46,48 @@
 
 @if (_allTierRows.Count > 0)
 {
-	<details class="mb-4">
-		<summary class="fw-semibold">All Hub Tier Lists (@_allTierRows.Count entries)</summary>
-		<p class="text-muted mt-2">Loaded @_allTierRows.Count ranked entries across all attacker types.</p>
+	<h2>Hub Tier Lists</h2>
+	<p class="text-muted mt-2">Loaded @_allTierRows.Count ranked entries across all attacker types.</p>
 
-		<div class="table-responsive">
-			<table class="table table-striped table-sm">
-				<thead>
-					<tr>
-						<th>Attacker Type</th>
-						<th>Rank</th>
-						<th>#</th>
-						<th>Name</th>
-						<th>Form</th>
-						<th>Fast Attack</th>
-						<th>Charged Attack</th>
-						<th>DPS</th>
-						<th>TDO</th>
-						<th>Score</th>
-					</tr>
-				</thead>
-				<tbody>
-					@foreach (var row in _allTierRows)
-					{
+	@foreach (var section in GetHubTierSections())
+	{
+		<details class="mb-3">
+			<summary class="fw-semibold">@section.Label Tier List (@section.TierList.Count entries)</summary>
+			<div class="table-responsive mt-2">
+				<table class="table table-striped table-sm">
+					<thead>
 						<tr>
-							<td>@row.AttackerType</td>
-							<td>@row.Pokemon.Rank</td>
-							<td>@row.Pokemon.PokemonNumber</td>
-							<td>@row.Pokemon.Name</td>
-							<td>@row.Pokemon.Form</td>
-							<td>@row.Pokemon.FastAttack</td>
-							<td>@row.Pokemon.ChargedAttack</td>
-							<td>@row.Pokemon.DPS</td>
-							<td>@row.Pokemon.TDO</td>
-							<td>@row.Pokemon.Score</td>
+							<th>Rank</th>
+							<th>#</th>
+							<th>Name</th>
+							<th>Form</th>
+							<th>Fast Attack</th>
+							<th>Charged Attack</th>
+							<th>DPS</th>
+							<th>TDO</th>
+							<th>Score</th>
 						</tr>
-					}
-				</tbody>
-			</table>
-		</div>
-	</details>
+					</thead>
+					<tbody>
+						@foreach (var pokemon in section.TierList)
+						{
+							<tr>
+								<td>@pokemon.Rank</td>
+								<td>@pokemon.PokemonNumber</td>
+								<td>@pokemon.Name</td>
+								<td>@pokemon.Form</td>
+								<td>@pokemon.FastAttack</td>
+								<td>@pokemon.ChargedAttack</td>
+								<td>@pokemon.DPS</td>
+								<td>@pokemon.TDO</td>
+								<td>@pokemon.Score</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</details>
+	}
 }
 
 @if (_validationFailures.Count > 0)
@@ -238,6 +240,12 @@
 		public required IList<RankedPokemon> Team { get; init; }
 	}
 
+	private sealed class HubTierSection
+	{
+		public required string Label { get; init; }
+		public required IList<HubRankedPokemon> TierList { get; init; }
+	}
+
 	private async Task<HubRankingResponse?> LoadAllTierListsAsync()
 	{
 		_hubErrorMessage = null;
@@ -321,6 +329,28 @@
 				AttackerType = attackerType,
 				Pokemon = pokemon
 			});
+		}
+	}
+
+	private IEnumerable<HubTierSection> GetHubTierSections()
+	{
+		foreach (var attackerType in _attackerTypes)
+		{
+			var tierList = _allTierRows
+				.Where(x => string.Equals(x.AttackerType, attackerType, StringComparison.OrdinalIgnoreCase))
+				.Select(x => x.Pokemon)
+				.ToList();
+
+			if (tierList.Count == 0)
+			{
+				continue;
+			}
+
+			yield return new HubTierSection
+			{
+				Label = char.ToUpperInvariant(attackerType[0]) + attackerType[1..],
+				TierList = tierList
+			};
 		}
 	}
 

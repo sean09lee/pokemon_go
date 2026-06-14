@@ -212,7 +212,16 @@ internal class HubHelpers
             return null;
         }
 
-        var match = Regex.Match(href, @"/pokemon/(?<num>\d{1,4})(?:-(?<form>[a-z0-9-]+))?$", RegexOptions.IgnoreCase);
+        var normalizedHref = href.Trim();
+        var queryIndex = normalizedHref.IndexOfAny(['?', '#']);
+        if (queryIndex >= 0)
+        {
+            normalizedHref = normalizedHref[..queryIndex];
+        }
+
+        normalizedHref = normalizedHref.TrimEnd('/');
+
+        var match = Regex.Match(normalizedHref, @"/pokemon/(?<num>\d{1,4})(?:-(?<form>[a-z0-9_-]+))?$", RegexOptions.IgnoreCase);
         if (!match.Success)
         {
             return null;
@@ -238,7 +247,7 @@ internal class HubHelpers
         }
 
         var words = slug
-            .Split('-', StringSplitOptions.RemoveEmptyEntries)
+            .Split(['-', '_'], StringSplitOptions.RemoveEmptyEntries)
             .Select(x => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(x.ToLowerInvariant()));
 
         var combined = string.Join(' ', words);

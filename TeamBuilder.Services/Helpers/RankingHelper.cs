@@ -7,7 +7,7 @@ internal static class RankingHelper
     internal static Task<IList<RankedPokemon>> BuildTopRaidTeamAsync(
         IEnumerable<Pokemon> ownedPokemon,
         IEnumerable<HubRankedPokemon> tierList,
-        IEnumerable<PokemonEvolution> evolutions,
+        IReadOnlyDictionary<int, HashSet<int>> evolutionMap,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -17,8 +17,6 @@ internal static class RankingHelper
             .Where(x => x.PokemonNumber is not null)
             .GroupBy(x => x.PokemonNumber!.Value)
             .ToDictionary(x => x.Key, x => x.ToList());
-
-        var evolutionMap = BuildEvolutionMap(evolutions);
 
         var rankedOwned = new List<(Pokemon Owned, int Rank, HubRankedPokemon Matched, Pokemon? EvolvedOwned)>();
 
@@ -60,9 +58,18 @@ internal static class RankingHelper
             })
             .ToList();
 
-            return Task.FromResult(results);
+        return Task.FromResult(results);
     }
 
+    /// <summary>
+    /// Get the best ranked candidate for a given owned pokemon
+    /// based on the hub tier list
+    /// </summary>
+    /// <param name="owned"></param>
+    /// <param name="ownedList"></param>
+    /// <param name="rankedByNumber"></param>
+    /// <param name="evolutionMap"></param>
+    /// <returns></returns>
     private static (Pokemon Owned, int Rank, HubRankedPokemon Matched, Pokemon? EvolvedOwned)? GetBestRankCandidate(
         Pokemon owned,
         IReadOnlyList<Pokemon> ownedList,
@@ -94,7 +101,7 @@ internal static class RankingHelper
                     .ThenByDescending(x => x.CP ?? int.MinValue)
                     .FirstOrDefault();
 
-                var preferredForm = evolvedOwned?.Form;
+                var preferredForm = evolvedOwned?.Form ?? owned.Form;
                 var evolutionMatch = FindBestMatchForNumber(evolutionNumber, preferredForm, rankedByNumber);
                 if (evolutionMatch is not null)
                 {
@@ -129,16 +136,21 @@ internal static class RankingHelper
             return null;
         }
 
+        if (string.IsNullOrWhiteSpace(preferredForm))
+        {
+            return entries
+                .OrderBy(x => x.Rank ?? int.MaxValue)
+                .FirstOrDefault();
+        }
+
         var normalizedForm = NormalizeForm(preferredForm);
-        var exact = entries
+        return entries
             .Where(x => NormalizeForm(x.Form) == normalizedForm)
             .OrderBy(x => x.Rank ?? int.MaxValue)
             .FirstOrDefault();
-
-        return exact ?? entries.OrderBy(x => x.Rank ?? int.MaxValue).FirstOrDefault();
     }
 
-    private static Dictionary<int, HashSet<int>> BuildEvolutionMap(IEnumerable<PokemonEvolution> evolutions)
+    internal static Dictionary<int, HashSet<int>> BuildEvolutionMap(IEnumerable<PokemonEvolution> evolutions)
     {
         var edges = new Dictionary<int, HashSet<int>>();
 
