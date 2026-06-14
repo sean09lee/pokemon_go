@@ -11,7 +11,8 @@ public class RankingService(PogoApiService pogoApiService)
     public async Task<RankingResponse> BuildRankingResponseAsync(IEnumerable<Pokemon> ownedPokemon, HubRankingResponse hubRanking, CancellationToken cancellationToken = default)
     {
         var evolutionResponse = await _pogoApiService.GetPokemonEvolutionsAsync(cancellationToken);
-        var evolutionMap = RankingHelper.BuildEvolutionMap(evolutionResponse);
+        var megaPokemon = await _pogoApiService.GetMegaPokemonAsync(cancellationToken);
+        var evolutionMap = RankingHelper.BuildEvolutionMap(evolutionResponse, megaPokemon);
 
         return new RankingResponse
         {

@@ -46,7 +46,8 @@ public class PogoApiService(PogoHelpers pogoHelpers)
       => await _helper.GetTypedJsonAsync<IList<PokemonEvolution>>("pokemon_evolutions.json", cancellationToken) ?? [];
   public Task<PogoApiResponse> GetRaidBossesAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("raid_bosses.json", cancellationToken);
   public Task<PogoApiResponse> GetResearchTaskExclusivePokemonAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("research_task_exclusive_pokemon.json", cancellationToken);
-  public Task<PogoApiResponse> GetMegaPokemonAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("mega_pokemon.json", cancellationToken);
+  public async Task<IList<MegaPokemon>> GetMegaPokemonAsync(CancellationToken cancellationToken = default)
+      => await _helper.GetTypedJsonAsync<IList<MegaPokemon>>("mega_pokemon.json", cancellationToken) ?? [];
   public Task<PogoApiResponse> GetPokemonHeightWeightScaleAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("pokemon_height_weight_scale.json", cancellationToken);
   public Task<PogoApiResponse> GetLevelupRewardsAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("levelup_rewards.json", cancellationToken);
   public Task<PogoApiResponse> GetBadgesAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("badges.json", cancellationToken);

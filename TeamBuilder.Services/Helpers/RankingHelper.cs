@@ -89,10 +89,24 @@ internal static class RankingHelper
             candidates.Add((selfMatch, null));
         }
 
+        if (IsMegaCapable(owned.PokemonNumber.Value, evolutionMap))
+        {
+            var selfMegaMatch = FindBestSpecialFormMatchForNumber(owned.PokemonNumber.Value, rankedByNumber, "mega", "primal");
+            if (selfMegaMatch is not null)
+            {
+                candidates.Add((selfMegaMatch, owned));
+            }
+        }
+
         if (evolutionMap.TryGetValue(owned.PokemonNumber.Value, out var evolutions))
         {
             foreach (var evolutionNumber in evolutions)
             {
+                if (evolutionNumber == owned.PokemonNumber.Value)
+                {
+                    continue;
+                }
+
                 var evolvedOwned = ownedList
                     .Where(x => x.PokemonNumber == evolutionNumber)
                     .OrderByDescending(x => x.IvAvg ?? int.MinValue)
@@ -106,6 +120,15 @@ internal static class RankingHelper
                 if (evolutionMatch is not null)
                 {
                     candidates.Add((evolutionMatch, evolvedOwned));
+                }
+
+                if (IsMegaCapable(evolutionNumber, evolutionMap))
+                {
+                    var megaMatch = FindBestSpecialFormMatchForNumber(evolutionNumber, rankedByNumber, "mega", "primal");
+                    if (megaMatch is not null)
+                    {
+                        candidates.Add((megaMatch, evolvedOwned));
+                    }
                 }
             }
         }
@@ -124,6 +147,22 @@ internal static class RankingHelper
         }
 
         return (owned, best.Ranked.Rank ?? int.MaxValue, best.Ranked, best.OwnedEvolution);
+    }
+
+    private static HubRankedPokemon? FindBestSpecialFormMatchForNumber(
+        int pokemonNumber,
+        IReadOnlyDictionary<int, List<HubRankedPokemon>> rankedByNumber,
+        params string[] formKeywords)
+    {
+        if (!rankedByNumber.TryGetValue(pokemonNumber, out var entries) || entries.Count == 0)
+        {
+            return null;
+        }
+
+        return entries
+            .Where(x => formKeywords.Any(keyword => NormalizeForm(x.Form).Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(x => x.Rank ?? int.MaxValue)
+            .FirstOrDefault();
     }
 
     private static HubRankedPokemon? FindBestMatchForNumber(
@@ -150,7 +189,9 @@ internal static class RankingHelper
             .FirstOrDefault();
     }
 
-    internal static Dictionary<int, HashSet<int>> BuildEvolutionMap(IEnumerable<PokemonEvolution> evolutions)
+    internal static Dictionary<int, HashSet<int>> BuildEvolutionMap(
+        IEnumerable<PokemonEvolution> evolutions,
+        IEnumerable<MegaPokemon>? megaPokemon = null)
     {
         var edges = new Dictionary<int, HashSet<int>>();
 
@@ -177,6 +218,21 @@ internal static class RankingHelper
             }
         }
 
+        foreach (var megaId in megaPokemon?
+            .Where(x => x.PokemonId is not null)
+            .Select(x => x.PokemonId!.Value)
+            .Distinct()
+            ?? [])
+        {
+            if (!edges.TryGetValue(megaId, out var set))
+            {
+                set = new HashSet<int>();
+                edges[megaId] = set;
+            }
+
+            set.Add(megaId);
+        }
+
         var expanded = new Dictionary<int, HashSet<int>>();
         foreach (var node in edges.Keys)
         {
@@ -186,6 +242,12 @@ internal static class RankingHelper
         }
 
         return expanded;
+    }
+
+    private static bool IsMegaCapable(int pokemonNumber, IReadOnlyDictionary<int, HashSet<int>> evolutionMap)
+    {
+        return evolutionMap.TryGetValue(pokemonNumber, out var evolutions)
+            && evolutions.Contains(pokemonNumber);
     }
 
     private static void Expand(int current, IReadOnlyDictionary<int, HashSet<int>> edges, HashSet<int> visited)
