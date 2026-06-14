@@ -8,24 +8,27 @@
 
 <PageTitle>Home</PageTitle>
 
-<h1>Pokémon CSV Import</h1>
+<section id="steps">
+	<p>Step 1. Download Poke Genie</p>
+	<p>Step 2. Scan all your pokemon in Pokemon Go</p>
+	<p>Step 3. Export your pokemon from Poke Genie to a csv</p>
+	<p>Step 4. Upload your Pokémon export CSV to parse it into a typed list.</p>
 
-<p>Upload your Pokémon export CSV to parse it into a typed list.</p>
+	<div class="d-flex gap-2 align-items-center mb-3">
+		<label for="pokemonCsvInput" class="btn btn-dark mb-0">Upload CSV</label>
+		<InputFile id="pokemonCsvInput" class="d-none" OnChange="OnCsvSelected" accept=".csv" />
 
-<div class="d-flex gap-2 align-items-center mb-3">
-	<label for="pokemonCsvInput" class="btn btn-primary mb-0">Upload CSV</label>
-	<InputFile id="pokemonCsvInput" class="d-none" OnChange="OnCsvSelected" accept=".csv" />
+		@if (_isLoading)
+		{
+			<span class="text-muted">Parsing...</span>
+		}
+	</div>
 
-	@if (_isLoading)
+	@if (!string.IsNullOrWhiteSpace(_errorMessage))
 	{
-		<span class="text-muted">Parsing...</span>
+		<div class="alert alert-danger" role="alert">@_errorMessage</div>
 	}
-</div>
-
-@if (!string.IsNullOrWhiteSpace(_errorMessage))
-{
-	<div class="alert alert-danger" role="alert">@_errorMessage</div>
-}
+</section>
 
 @if (!string.IsNullOrWhiteSpace(_hubErrorMessage))
 {
@@ -33,7 +36,7 @@
 }
 
 <div class="d-flex gap-2 align-items-center mb-3">
-	<button class="btn btn-outline-primary" @onclick="LoadAllTierListsAsync" disabled="@_isTierLoading">
+	<button class="btn btn-secondary" @onclick="LoadAllTierListsAsync" disabled="@_isTierLoading">
 		@(_isTierLoading ? "Loading tier lists..." : "Load all Hub tier lists")
 	</button>
 </div>
