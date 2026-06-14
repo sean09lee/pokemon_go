@@ -4,35 +4,34 @@ using TeamBuilder.Services.Helpers;
 
 namespace TeamBuilder.Services.Services;
 
-public class RankingService
+public class RankingService(PogoApiService pogoApiService)
 {
-    public RankingResponse BuildRankingResponse(IEnumerable<Pokemon> ownedPokemon, HubRankingResponse hubRanking)
+    private readonly PogoApiService _pogoApiService = pogoApiService;
+
+    public async Task<RankingResponse> BuildRankingResponseAsync(IEnumerable<Pokemon> ownedPokemon, HubRankingResponse hubRanking, CancellationToken cancellationToken = default)
     {
+        var evolutionResponse = await _pogoApiService.GetPokemonEvolutionsAsync(cancellationToken);
+
         return new RankingResponse
         {
-            NormalRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.NormalTierList),
-            FireRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.FireTierList),
-            WaterRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.WaterTierList),
-            ElectricRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.ElectricTierList),
-            GrassRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.GrassTierList),
-            IceRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.IceTierList),
-            FightingRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.FightingTierList),
-            PoisonRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.PoisonTierList),
-            GroundRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.GroundTierList),
-            FlyingRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.FlyingTierList),
-            PsychicRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.PsychicTierList),
-            BugRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.BugTierList),
-            RockRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.RockTierList),
-            GhostRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.GhostTierList),
-            DragonRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.DragonTierList),
-            DarkRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.DarkTierList),
-            SteelRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.SteelTierList),
-            FairyRaidTeam = RankingHelper.BuildTopRaidTeam(ownedPokemon, hubRanking.FairyTierList)
+            NormalRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.NormalTierList, evolutionResponse, cancellationToken),
+            FireRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.FireTierList, evolutionResponse, cancellationToken),
+            WaterRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.WaterTierList, evolutionResponse, cancellationToken),
+            ElectricRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.ElectricTierList, evolutionResponse, cancellationToken),
+            GrassRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.GrassTierList, evolutionResponse, cancellationToken),
+            IceRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.IceTierList, evolutionResponse, cancellationToken),
+            FightingRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.FightingTierList, evolutionResponse, cancellationToken),
+            PoisonRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.PoisonTierList, evolutionResponse, cancellationToken),
+            GroundRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.GroundTierList, evolutionResponse, cancellationToken),
+            FlyingRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.FlyingTierList, evolutionResponse, cancellationToken),
+            PsychicRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.PsychicTierList, evolutionResponse, cancellationToken),
+            BugRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.BugTierList, evolutionResponse, cancellationToken),
+            RockRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.RockTierList, evolutionResponse, cancellationToken),
+            GhostRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.GhostTierList, evolutionResponse, cancellationToken),
+            DragonRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.DragonTierList, evolutionResponse, cancellationToken),
+            DarkRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.DarkTierList, evolutionResponse, cancellationToken),
+            SteelRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.SteelTierList, evolutionResponse, cancellationToken),
+            FairyRaidTeam = await RankingHelper.BuildTopRaidTeamAsync(ownedPokemon, hubRanking.FairyTierList, evolutionResponse, cancellationToken)
         };
-    }
-
-    public Task<RankingResponse> GetRankingAsync()
-    {
-        throw new NotImplementedException();
     }
 }

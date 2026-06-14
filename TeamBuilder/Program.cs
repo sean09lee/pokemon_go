@@ -1,4 +1,5 @@
 using TeamBuilder.Components;
+using TeamBuilder.Services.Helpers;
 using TeamBuilder.Services.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +10,11 @@ builder.Services.AddRazorComponents()
 builder.Services.AddScoped<CsvParserService>();
 builder.Services.AddScoped<RankingService>();
 builder.Services.AddScoped<HubApiService>();
+builder.Services.AddScoped<PogoApiService>();
+builder.Services.AddHttpClient<PogoHelpers>(client =>
+{
+    client.BaseAddress = new Uri("https://pogoapi.net/");
+});
 
 var app = builder.Build();
 

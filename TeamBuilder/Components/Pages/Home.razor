@@ -360,7 +360,7 @@
 			{
 				return;
 			}
-			_rankingResponse = RankingService.BuildRankingResponse(_pokemon, hubRanking);
+			_rankingResponse = await RankingService.BuildRankingResponseAsync(_pokemon, hubRanking);
 
 			if (!GetRaidTeamSections().Any(x => x.Team.Count > 0))
 			{

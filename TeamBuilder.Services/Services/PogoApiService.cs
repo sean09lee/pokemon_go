@@ -1,3 +1,4 @@
+using TeamBuilder.Data.Models;
 using TeamBuilder.Data.Responses;
 using TeamBuilder.Services.Helpers;
 
@@ -41,7 +42,8 @@ public class PogoApiService(PogoHelpers pogoHelpers)
   public Task<PogoApiResponse> GetGalarianPokemonAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("galarian_pokemon.json", cancellationToken);
   public Task<PogoApiResponse> GetCpMultiplierAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("cp_multiplier.json", cancellationToken);
   public Task<PogoApiResponse> GetCommunityDaysAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("community_days.json", cancellationToken);
-  public Task<PogoApiResponse> GetPokemonEvolutionsAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("pokemon_evolutions.json", cancellationToken);
+  public async Task<IList<PokemonEvolution>> GetPokemonEvolutionsAsync(CancellationToken cancellationToken = default)
+      => await _helper.GetTypedJsonAsync<IList<PokemonEvolution>>("pokemon_evolutions.json", cancellationToken) ?? [];
   public Task<PogoApiResponse> GetRaidBossesAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("raid_bosses.json", cancellationToken);
   public Task<PogoApiResponse> GetResearchTaskExclusivePokemonAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("research_task_exclusive_pokemon.json", cancellationToken);
   public Task<PogoApiResponse> GetMegaPokemonAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("mega_pokemon.json", cancellationToken);

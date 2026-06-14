@@ -6,6 +6,10 @@ namespace TeamBuilder.Services.Helpers;
 public class PogoHelpers(HttpClient httpClient)
 {
     private readonly HttpClient _httpClient = httpClient;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     internal async Task<PogoApiResponse> GetJsonAsync(string endpointFileName, CancellationToken cancellationToken)
     {
@@ -26,6 +30,27 @@ public class PogoHelpers(HttpClient httpClient)
         catch (Exception ex)
         {
             return PogoApiResponse.Fail(endpointFileName, ex.Message);
+        }
+    }
+
+    internal async Task<T?> GetTypedJsonAsync<T>(string endpointFileName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var path = BuildPath(endpointFileName);
+            using var response = await _httpClient.GetAsync(path, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return default;
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, cancellationToken);
+        }
+        catch
+        {
+            return default;
         }
     }
 
