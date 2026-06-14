@@ -1,0 +1,210 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Forms
+@using TeamBuilder.Services.Services
+@using TeamBuilder.Data.Models
+@using TeamBuilder.Data.Responses
+@inject CsvParserService CsvParserService
+@inject HubApiService HubApiService
+
+<PageTitle>Home</PageTitle>
+
+<h1>Pokémon CSV Import</h1>
+
+<p>Upload your Pokémon export CSV to parse it into a typed list.</p>
+
+<div class="d-flex gap-2 align-items-center mb-3">
+	<label for="pokemonCsvInput" class="btn btn-primary mb-0">Upload CSV</label>
+	<InputFile id="pokemonCsvInput" class="d-none" OnChange="OnCsvSelected" accept=".csv" />
+
+	@if (_isLoading)
+	{
+		<span class="text-muted">Parsing...</span>
+	}
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+	<div class="alert alert-danger" role="alert">@_errorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(_hubErrorMessage))
+{
+	<div class="alert alert-warning" role="alert">@_hubErrorMessage</div>
+}
+
+@if (_validationFailures.Count > 0)
+{
+	<div class="alert alert-warning" role="alert">
+		Found @_validationFailures.Count validation issue(s). Invalid fields were set to null.
+	</div>
+
+	<div class="table-responsive mb-3">
+		<table class="table table-sm table-bordered">
+			<thead>
+				<tr>
+					<th>Row</th>
+					<th>Column</th>
+					<th>Value</th>
+					<th>Issue</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var issue in _validationFailures.Take(50))
+				{
+					<tr>
+						<td>@issue.RowNumber</td>
+						<td>@issue.ColumnName</td>
+						<td>@issue.RawValue</td>
+						<td>@issue.Message</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+
+	@if (_validationFailures.Count > 50)
+	{
+		<p class="text-muted">Showing first 50 validation issues.</p>
+	}
+}
+
+@if (_pokemon.Count > 0)
+{
+	<div class="alert alert-success" role="alert">
+		Parsed @_pokemon.Count Pokémon from @_uploadedFileName.
+	</div>
+
+	<div class="table-responsive">
+		<table class="table table-striped table-sm">
+			<thead>
+				<tr>
+					<th>Index</th>
+					<th>#</th>
+					<th>Name</th>
+					<th>Form</th>
+					<th>Gender</th>
+					<th>CP</th>
+					<th>HP</th>
+					<th>Atk/Def/Sta IV</th>
+					<th>Quick Move</th>
+					<th>Charge Move</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var p in _pokemon)
+				{
+					<tr>
+						<td>@p.Index</td>
+						<td>@p.PokemonNumber</td>
+						<td>@p.Name</td>
+						<td>@p.Form</td>
+						<td>@p.Gender</td>
+						<td>@p.CP</td>
+						<td>@p.HP</td>
+						<td>@($"{p.AtkIV}/{p.DefIV}/{p.StaIV}")</td>
+						<td>@p.QuickMove</td>
+						<td>@p.ChargeMove</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+@if (_tierFits.Count > 0)
+{
+	<h2>Tier Fits</h2>
+	<div class="table-responsive">
+		<table class="table table-striped table-sm">
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>#</th>
+					<th>Form</th>
+					<th>Match</th>
+					<th>Tier</th>
+					<th>Rank</th>
+					<th>Variant</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var fit in _tierFits)
+				{
+					<tr>
+						<td>@fit.Pokemon?.Name</td>
+						<td>@fit.Pokemon?.PokemonNumber</td>
+						<td>@fit.Pokemon?.Form</td>
+						<td>@fit.MatchStatus</td>
+						<td>@fit.Entry?.Tier</td>
+						<td>@fit.Entry?.Rank</td>
+						<td>@fit.Entry?.VariantKey</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+@code {
+	private const long MaxCsvSize = 10 * 1024 * 1024;
+
+	private readonly List<Pokemon> _pokemon = [];
+	private readonly List<CsvValidationFailure> _validationFailures = [];
+	private readonly List<PokemonTierFit> _tierFits = [];
+	private string? _uploadedFileName;
+	private string? _errorMessage;
+	private string? _hubErrorMessage;
+	private bool _isLoading;
+
+	private async Task OnCsvSelected(InputFileChangeEventArgs e)
+	{
+		_errorMessage = null;
+		_hubErrorMessage = null;
+		_pokemon.Clear();
+		_validationFailures.Clear();
+		_tierFits.Clear();
+
+		try
+		{
+			_isLoading = true;
+			var file = e.File;
+			_uploadedFileName = file.Name;
+
+			await using var stream = file.OpenReadStream(MaxCsvSize);
+			var parseResult = await CsvParserService.ParsePokemonCsvAsync(stream);
+
+			if (!string.IsNullOrWhiteSpace(parseResult.FatalError))
+			{
+				_errorMessage = parseResult.FatalError;
+				return;
+			}
+
+			_pokemon.AddRange(parseResult.Pokemon);
+			_validationFailures.AddRange(parseResult.ValidationFailures);
+
+			if (_pokemon.Count == 0)
+			{
+				return;
+			}
+
+			var counters = await HubApiService.GetCountersAsync();
+			if (!string.IsNullOrWhiteSpace(counters.Error))
+			{
+				_hubErrorMessage = counters.Error;
+				_tierFits.AddRange(HubApiService.BuildTierFits(_pokemon, []));
+				return;
+			}
+
+			_tierFits.AddRange(HubApiService.BuildTierFits(_pokemon, counters.Entries));
+		}
+		catch (Exception ex)
+		{
+			_errorMessage = $"Failed to parse CSV: {ex.Message}";
+		}
+		finally
+		{
+			_isLoading = false;
+		}
+	}
+
+}

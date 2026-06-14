@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="../TeamBuilder.Data/TeamBuilder.Data.csproj" />
+  <Project Path="../TeamBuilder.Services/TeamBuilder.Services.csproj" />
+  <Project Path="TeamBuilder.csproj" />
+</Solution>
