@@ -48,6 +48,16 @@ td {
     border-color: #3a414a;
 }
 
+.form-control:disabled,
+.form-select:disabled,
+.form-control[disabled],
+.form-select[disabled] {
+    background-color: #ffffff;
+    color: #000000;
+    -webkit-text-fill-color: #000000;
+    opacity: 1;
+}
+
 .form-control:focus,
 .form-select:focus {
     background-color: #2a3038;

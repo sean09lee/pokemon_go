@@ -14,6 +14,13 @@
 	<p>Step 2. Scan all your pokemon in Pokemon Go</p>
 	<p>Step 3. Export your pokemon from Poke Genie to a csv</p>
 	<p>Step 4. Upload your exported csv Pokémon</p>
+	<p>Step 5. Set your stardust budget and candy inventory when prompted</p>
+
+	<div class="mb-3 w-50">
+		<label for="dustLimitInput" class="form-label">Stardust limit</label>
+		<input id="dustLimitInput" class="form-control" type="number" min="0" step="100"
+			   @bind="_dustLimit" @bind:event="oninput" disabled="@(_isLoading || _isTierLoading)" />
+	</div>
 
 	<div class="d-flex gap-2 align-items-center mb-3">
 		<label for="pokemonCsvInput" class="btn btn-secondary mb-0 @((_isLoading || _isTierLoading) ? "disabled" : string.Empty)">
@@ -41,6 +48,27 @@
 				 style="width: @_tierProgressPercent%;">@_tierProgressPercent%</div>
 		</div>
 		<small class="text-muted">@_tierProgressMessage</small>
+	</div>
+}
+
+@if (_candyQuestions.Count > 0)
+{
+	<div class="card mb-3">
+		<div class="card-body">
+			<h5 class="card-title mb-2">Candy Questions</h5>
+			<p class="text-muted mb-3">Answer these to continue team generation.</p>
+			@foreach (var question in _candyQuestions.Values.OrderBy(x => x.IsSubmitted).ThenBy(x => x.PokemonNumber))
+			{
+				<div class="d-flex align-items-end gap-2 mb-2">
+					<div class="flex-grow-1">
+						<label class="form-label mb-1">How much @question.DisplayName candy do you have?</label>
+						<input class="form-control" type="text" inputmode="numeric" pattern="[0-9]*"
+							   @bind="question.InputValue" @bind:event="oninput" onfocus="this.select();" disabled="@question.IsSubmitted" />
+					</div>
+					<button class="btn btn-primary" @onclick="() => SubmitCandyQuestion(question)" disabled="@question.IsSubmitted">Submit</button>
+				</div>
+			}
+		</div>
 	</div>
 }
 
@@ -174,13 +202,40 @@
 	</details>
 }
 
-@if (GetRaidTeamSections().Any(x => x.Team.Count > 0))
+@if (GetRaidTeamTypeSections().Any())
 {
 	<h2>Your Raid Teams</h2>
-	@foreach (var section in GetRaidTeamSections().Where(x => x.Team.Count > 0))
+	@foreach (var section in GetRaidTeamTypeSections())
 	{
+		var selectedTab = GetSelectedRaidTeamTab(section.TypeKey);
+		var selectedTeam = GetTeamForTab(section.Variants, selectedTab);
 		<details class="mb-3">
-			<summary class="fw-semibold">@section.Label Raid Team (@section.Team.Count)</summary>
+			<summary class="fw-semibold">@section.Label Raid Team</summary>
+
+			<ul class="nav nav-tabs mt-2 mb-2" role="tablist">
+				<li class="nav-item" role="presentation">
+					<button type="button"
+							class="nav-link @(selectedTab == "noInvestment" ? "active" : string.Empty)"
+							@onclick='@(() => SelectRaidTeamTab(section.TypeKey, "noInvestment"))'>
+						No Investment
+					</button>
+				</li>
+				<li class="nav-item" role="presentation">
+					<button type="button"
+							class="nav-link @(selectedTab == "currentResources" ? "active" : string.Empty)"
+							@onclick='@(() => SelectRaidTeamTab(section.TypeKey, "currentResources"))'>
+						Current Resources
+					</button>
+				</li>
+				<li class="nav-item" role="presentation">
+					<button type="button"
+							class="nav-link @(selectedTab == "unlimitedResources" ? "active" : string.Empty)"
+							@onclick='@(() => SelectRaidTeamTab(section.TypeKey, "unlimitedResources"))'>
+						Unlimited Resources
+					</button>
+				</li>
+			</ul>
+
 			<div class="table-responsive mt-2">
 				<table class="table table-striped table-sm">
 					<thead>
@@ -190,10 +245,15 @@
 							<th>Form</th>
 							<th>CP</th>
 							<th>HP</th>
+							<th>Rank</th>
+							<th>Ranked Target</th>
+							<th>Candy to Lv30</th>
+							<th>Dust to Lv30</th>
+							<th>Mega/Primal Energy</th>
 						</tr>
 					</thead>
 					<tbody>
-						@foreach (var p in section.Team)
+						@foreach (var p in selectedTeam)
 						{
 							<tr>
 								<td>@p.PokemonNumber</td>
@@ -201,6 +261,11 @@
 								<td>@p.Form</td>
 								<td>@p.CP</td>
 								<td>@p.HP</td>
+								<td>@p.Index</td>
+								<td>@GetRankedTargetDisplay(p)</td>
+								<td>@FormatNullableCost(p.TotalRequiredCandy)</td>
+								<td>@FormatNullableCost(p.RequiredDustToLevel30)</td>
+								<td>@FormatNullableCost(p.RequiredFirstTimeMegaEnergy)</td>
 							</tr>
 						}
 					</tbody>
@@ -217,6 +282,7 @@
 	private readonly List<CsvValidationFailure> _validationFailures = [];
 	private readonly List<HubTierRow> _allTierRows = [];
 	private RankingResponse _rankingResponse = new();
+	private readonly Dictionary<int, CandyQuestionState> _candyQuestions = [];
 	private static readonly string[] _attackerTypes =
 	[
 		"normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison",
@@ -227,27 +293,12 @@
 	private string? _errorMessage;
 	private string? _hubErrorMessage;
 	private string _tierProgressMessage = "Idle";
+	private readonly Dictionary<int, int> _candyByPokemonNumber = [];
+	private readonly Dictionary<string, string> _selectedRaidTeamTabByType = new(StringComparer.OrdinalIgnoreCase);
 	private bool _isLoading;
 	private bool _isTierLoading;
 	private int _tierProgressPercent;
-
-	private sealed class HubTierRow
-	{
-		public required string AttackerType { get; init; }
-		public required HubRankedPokemon Pokemon { get; init; }
-	}
-
-	private sealed class RaidTeamSection
-	{
-		public required string Label { get; init; }
-		public required IList<RankedPokemon> Team { get; init; }
-	}
-
-	private sealed class HubTierSection
-	{
-		public required string Label { get; init; }
-		public required IList<HubRankedPokemon> TierList { get; init; }
-	}
+	private int _dustLimit = 100000;
 
 	private async Task<HubRankingResponse?> LoadAllTierListsAsync()
 	{
@@ -273,10 +324,11 @@
 				tierMap[attackerType] = tierList;
 				AddTierRows(attackerType, tierList);
 
-				_tierProgressPercent = (int)Math.Round(((i + 1d) / _attackerTypes.Length) * 100d);
+				_tierProgressPercent = (int)Math.Round(((i + 1d) / _attackerTypes.Length) * 60d);
 			}
 
-			_tierProgressMessage = "Completed all tier lists.";
+			_tierProgressPercent = 60;
+			_tierProgressMessage = "Tier lists loaded. Building raid teams...";
 
 			_allTierRows.Sort((a, b) =>
 			{
@@ -319,7 +371,7 @@
 		}
 		finally
 		{
-			_isTierLoading = false;
+			// keep spinner active through raid-team generation
 		}
 	}
 
@@ -364,10 +416,15 @@
 		_pokemon.Clear();
 		_validationFailures.Clear();
 		_rankingResponse = new RankingResponse();
+		_candyQuestions.Clear();
+		_selectedRaidTeamTabByType.Clear();
 
 		try
 		{
 			_isLoading = true;
+			_isTierLoading = true;
+			_tierProgressPercent = 0;
+			_tierProgressMessage = "Starting...";
 			var file = e.File;
 			_uploadedFileName = file.Name;
 
@@ -393,9 +450,18 @@
 			{
 				return;
 			}
-			_rankingResponse = await RankingService.BuildRankingResponseAsync(_pokemon, hubRanking);
+			_rankingResponse = await RankingService.BuildRankingResponseAsync(
+				_pokemon,
+				hubRanking,
+				_dustLimit,
+				_candyByPokemonNumber,
+				PromptCandyAmountAsync,
+				ReportRankingProgressAsync);
 
-			if (!GetRaidTeamSections().Any(x => x.Team.Count > 0))
+			_tierProgressPercent = 100;
+			_tierProgressMessage = "Completed raid team generation.";
+
+			if (!GetRaidTeamTypeSections().Any())
 			{
 				_hubErrorMessage = "No owned Pokémon were found in the current Hub tier lists.";
 			}
@@ -407,32 +473,128 @@
 		finally
 		{
 			_isLoading = false;
+			_isTierLoading = false;
 		}
 	}
 
-	private IEnumerable<RaidTeamSection> GetRaidTeamSections()
+	private async Task<int> PromptCandyAmountAsync(int pokemonNumber, string? pokemonName, CancellationToken cancellationToken)
 	{
-		return
-		[
-			new RaidTeamSection { Label = "Normal", Team = _rankingResponse.NormalRaidTeam },
-			new RaidTeamSection { Label = "Fire", Team = _rankingResponse.FireRaidTeam },
-			new RaidTeamSection { Label = "Water", Team = _rankingResponse.WaterRaidTeam },
-			new RaidTeamSection { Label = "Electric", Team = _rankingResponse.ElectricRaidTeam },
-			new RaidTeamSection { Label = "Grass", Team = _rankingResponse.GrassRaidTeam },
-			new RaidTeamSection { Label = "Ice", Team = _rankingResponse.IceRaidTeam },
-			new RaidTeamSection { Label = "Fighting", Team = _rankingResponse.FightingRaidTeam },
-			new RaidTeamSection { Label = "Poison", Team = _rankingResponse.PoisonRaidTeam },
-			new RaidTeamSection { Label = "Ground", Team = _rankingResponse.GroundRaidTeam },
-			new RaidTeamSection { Label = "Flying", Team = _rankingResponse.FlyingRaidTeam },
-			new RaidTeamSection { Label = "Psychic", Team = _rankingResponse.PsychicRaidTeam },
-			new RaidTeamSection { Label = "Bug", Team = _rankingResponse.BugRaidTeam },
-			new RaidTeamSection { Label = "Rock", Team = _rankingResponse.RockRaidTeam },
-			new RaidTeamSection { Label = "Ghost", Team = _rankingResponse.GhostRaidTeam },
-			new RaidTeamSection { Label = "Dragon", Team = _rankingResponse.DragonRaidTeam },
-			new RaidTeamSection { Label = "Dark", Team = _rankingResponse.DarkRaidTeam },
-			new RaidTeamSection { Label = "Steel", Team = _rankingResponse.SteelRaidTeam },
-			new RaidTeamSection { Label = "Fairy", Team = _rankingResponse.FairyRaidTeam }
-		];
+		if (_candyByPokemonNumber.TryGetValue(pokemonNumber, out var existing))
+		{
+			return existing;
+		}
+
+		var displayName = string.IsNullOrWhiteSpace(pokemonName) ? $"#{pokemonNumber}" : pokemonName;
+		var question = _candyQuestions.GetValueOrDefault(pokemonNumber);
+		if (question is null)
+		{
+			question = new CandyQuestionState
+			{
+				PokemonNumber = pokemonNumber,
+				DisplayName = displayName
+			};
+			_candyQuestions[pokemonNumber] = question;
+			_tierProgressMessage = $"Waiting for candy input: {displayName}";
+			await InvokeAsync(StateHasChanged);
+		}
+
+		using var registration = cancellationToken.Register(() => question.Completion.TrySetCanceled(cancellationToken));
+		var candy = await question.Completion.Task;
+		_candyByPokemonNumber[pokemonNumber] = candy;
+		return candy;
+	}
+
+	private void SubmitCandyQuestion(CandyQuestionState question)
+	{
+		if (question.IsSubmitted)
+		{
+			return;
+		}
+
+		if (!int.TryParse(question.InputValue, out var candy) || candy < 0)
+		{
+			candy = 0;
+		}
+
+		question.IsSubmitted = true;
+		_candyByPokemonNumber[question.PokemonNumber] = candy;
+		question.Completion.TrySetResult(candy);
+	}
+
+	private async Task ReportRankingProgressAsync(string stageMessage, int rankingPercent)
+	{
+		var bounded = Math.Max(0, Math.Min(100, rankingPercent));
+		_tierProgressPercent = 60 + (int)Math.Round(bounded * 0.4d);
+		_tierProgressMessage = stageMessage;
+		await InvokeAsync(StateHasChanged);
+	}
+
+	private static string FormatNullableCost(int? value)
+	{
+		return value is null or <= 0 ? "-" : value.Value.ToString();
+	}
+
+	private static string GetRankedTargetDisplay(RankedPokemon pokemon)
+	{
+		if (string.IsNullOrWhiteSpace(pokemon.EvolvedName))
+		{
+			return pokemon.Name ?? "-";
+		}
+
+		if (string.IsNullOrWhiteSpace(pokemon.EvolvedForm)
+			|| string.Equals(pokemon.EvolvedForm, "normal", StringComparison.OrdinalIgnoreCase))
+		{
+			return pokemon.EvolvedName;
+		}
+
+		return $"{pokemon.EvolvedName} ({pokemon.EvolvedForm})";
+	}
+
+	private IEnumerable<(string TypeKey, string Label, RaidTeamVariantResult Variants)> GetRaidTeamTypeSections()
+	{
+		foreach (var attackerType in _attackerTypes)
+		{
+			if (!_rankingResponse.RaidTeamsByType.TryGetValue(attackerType, out var variants))
+			{
+				continue;
+			}
+
+			if (variants.NoInvestmentTeam.Count == 0
+				&& variants.CurrentResourcesTeam.Count == 0
+				&& variants.UnlimitedResourcesTeam.Count == 0)
+			{
+				continue;
+			}
+
+			var label = char.ToUpperInvariant(attackerType[0]) + attackerType[1..];
+			yield return (attackerType, label, variants);
+		}
+	}
+
+	private string GetSelectedRaidTeamTab(string attackerType)
+	{
+		if (_selectedRaidTeamTabByType.TryGetValue(attackerType, out var tab))
+		{
+			return tab;
+		}
+
+		_selectedRaidTeamTabByType[attackerType] = "noInvestment";
+		return "noInvestment";
+	}
+
+	private void SelectRaidTeamTab(string attackerType, string tab)
+	{
+		_selectedRaidTeamTabByType[attackerType] = tab;
+	}
+
+	private static IList<RankedPokemon> GetTeamForTab(RaidTeamVariantResult variants, string tab)
+	{
+		return tab switch
+		{
+			"currentResources" => variants.CurrentResourcesTeam,
+			"unlimitedResources" => variants.UnlimitedResourcesTeam,
+			_ => variants.NoInvestmentTeam
+		};
 	}
 
 }

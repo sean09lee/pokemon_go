@@ -1,3 +1,4 @@
+using System.Globalization;
 using TeamBuilder.Data.Models;
 using TeamBuilder.Data.Responses;
 using TeamBuilder.Services.Helpers;
@@ -31,7 +32,15 @@ public class PogoApiService(PogoHelpers pogoHelpers)
   public Task<PogoApiResponse> GetWeatherBoostsAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("weather_boosts.json", cancellationToken);
   public Task<PogoApiResponse> GetTypeEffectivenessAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("type_effectiveness.json", cancellationToken);
   public Task<PogoApiResponse> GetPokemonRarityAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("pokemon_rarity.json", cancellationToken);
-  public Task<PogoApiResponse> GetPokemonPowerupRequirementsAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("pokemon_powerup_requirements.json", cancellationToken);
+    public async Task<IReadOnlyDictionary<decimal, PokemonPowerupRequirement>> GetPokemonPowerupRequirementsAsync(CancellationToken cancellationToken = default)
+    {
+      var raw = await _helper.GetTypedJsonAsync<Dictionary<string, PokemonPowerupRequirement>>("pokemon_powerup_requirements.json", cancellationToken) ?? [];
+      return raw
+        .Where(x => decimal.TryParse(x.Key, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
+        .ToDictionary(
+          x => decimal.Parse(x.Key, NumberStyles.Number, CultureInfo.InvariantCulture),
+          x => x.Value);
+    }
   public Task<PogoApiResponse> GetPokemonGendersAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("pokemon_genders.json", cancellationToken);
   public Task<PogoApiResponse> GetPlayerXpRequirementsAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("player_xp_requirements.json", cancellationToken);
   public Task<PogoApiResponse> GetPokemonGenerationsAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("pokemon_generations.json", cancellationToken);
@@ -44,6 +53,8 @@ public class PogoApiService(PogoHelpers pogoHelpers)
   public Task<PogoApiResponse> GetCommunityDaysAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("community_days.json", cancellationToken);
   public async Task<IList<PokemonEvolution>> GetPokemonEvolutionsAsync(CancellationToken cancellationToken = default)
       => await _helper.GetTypedJsonAsync<IList<PokemonEvolution>>("pokemon_evolutions.json", cancellationToken) ?? [];
+    public async Task<IList<PokemonTypeInfo>> GetPokemonTypesDataAsync(CancellationToken cancellationToken = default)
+      => await _helper.GetTypedJsonAsync<IList<PokemonTypeInfo>>("pokemon_types.json", cancellationToken) ?? [];
   public Task<PogoApiResponse> GetRaidBossesAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("raid_bosses.json", cancellationToken);
   public Task<PogoApiResponse> GetResearchTaskExclusivePokemonAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("research_task_exclusive_pokemon.json", cancellationToken);
   public async Task<IList<MegaPokemon>> GetMegaPokemonAsync(CancellationToken cancellationToken = default)

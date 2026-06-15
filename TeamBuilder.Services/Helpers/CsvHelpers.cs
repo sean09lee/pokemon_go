@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using TeamBuilder.Data.Enums;
 using TeamBuilder.Data.Models;
 using TeamBuilder.Data.Responses;
 
@@ -28,11 +29,14 @@ internal class CsvHelpers
         int rowNumber,
         ICollection<CsvValidationFailure> failures)
     {
+        var name = GetString(row, header, "Name");
+        var form = GetString(row, header, "Form");
+
         return new Pokemon
         {
             Index = GetInt(row, header, "Index", rowNumber, failures),
-            Name = GetString(row, header, "Name"),
-            Form = GetString(row, header, "Form"),
+            Name = name,
+            Form = InferForm(name, form),
             PokemonNumber = GetInt(row, header, "Pokemon Number", rowNumber, failures),
             Gender = GetString(row, header, "Gender"),
             CP = GetInt(row, header, "CP", rowNumber, failures),
@@ -81,6 +85,55 @@ internal class CsvHelpers
             ShaPurL = GetInt(row, header, "Sha/Pur (L)", rowNumber, failures),
             MarkedForPvpUse = GetString(row, header, "Marked for PvP use")
         };
+    }
+
+    private static string InferForm(string? name, string? form)
+    {
+        if (!string.IsNullOrWhiteSpace(form))
+        {
+            return CanonicalizeForm(form.Trim());
+        }
+
+        // If form is not provided, attempt to infer it from the name
+        var normalizedName = name?.Trim() ?? string.Empty;
+        if (normalizedName.Contains(nameof(PokemonForms.Shadow), StringComparison.OrdinalIgnoreCase))
+        {
+            return nameof(PokemonForms.Shadow);
+        }
+
+        if (normalizedName.Contains(nameof(PokemonForms.Alola), StringComparison.OrdinalIgnoreCase) ||
+            normalizedName.Contains("alolan", StringComparison.OrdinalIgnoreCase))
+        {
+            return nameof(PokemonForms.Alola);
+        }
+
+        if (normalizedName.Contains(nameof(PokemonForms.Mega), StringComparison.OrdinalIgnoreCase))
+        {
+            return nameof(PokemonForms.Mega);
+        }
+
+        return nameof(PokemonForms.Normal);
+    }
+
+    private static string CanonicalizeForm(string form)
+    {
+        if (form.Equals("shadow", StringComparison.OrdinalIgnoreCase))
+        {
+            return nameof(PokemonForms.Shadow);
+        }
+
+        if (form.Equals("alolan", StringComparison.OrdinalIgnoreCase)
+            || form.Equals("alola", StringComparison.OrdinalIgnoreCase))
+        {
+            return nameof(PokemonForms.Alola);
+        }
+
+        if (form.Equals("normal", StringComparison.OrdinalIgnoreCase))
+        {
+            return nameof(PokemonForms.Normal);
+        }
+
+        return form;
     }
 
     internal static string? GetString(string[] row, IReadOnlyDictionary<string, int> header, string column)

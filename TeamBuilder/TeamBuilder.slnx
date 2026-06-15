@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="../TeamBuilder.Data/TeamBuilder.Data.csproj" />
   <Project Path="../TeamBuilder.Services/TeamBuilder.Services.csproj" />
+  <Project Path="../TeamBuilder.Tests/TeamBuilder.Tests.csproj" Id="495c7faf-a6ff-4bb8-8dbb-66241e54e290" />
   <Project Path="TeamBuilder.csproj" />
 </Solution>

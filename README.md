@@ -22,19 +22,19 @@ Blazor web app that helps you build raid teams from your own Pokémon collection
 
 ## Run locally
 
-### 1) Prerequisites
+### 1. Prerequisites
 
 - Install **.NET 10 SDK**
 - Install **PowerShell** (Windows PowerShell or PowerShell 7)
 
-### 2) Restore and build
+### 2. Restore and build
 
 From the repository root:
 
 - `dotnet restore`
 - `dotnet build .\TeamBuilder\TeamBuilder.csproj`
 
-### 3) Install Playwright browser binaries (first time only)
+### 3. Install Playwright browser binaries (first time only)
 
 After a successful build, install Chromium used by the crawler:
 
@@ -42,7 +42,7 @@ After a successful build, install Chromium used by the crawler:
 
 If you build in Release, use the corresponding `Release\net10.0` path.
 
-### 4) Run the app
+### 4. Run the app
 
 - `dotnet run --project .\TeamBuilder\TeamBuilder.csproj`
 

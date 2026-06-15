@@ -12,7 +12,15 @@ public class RankedPokemon
 
     // Evolved pokemon info (if applicable)
     public string? EvolvedName { get; set; }
+    public string? EvolvedForm { get; set; }
     public int? EvolvedPokemonNumber { get; set; }
     public int? EvolvedCP { get; set; }
     public int? EvolvedHP { get; set; }
+
+    // Resource requirements for this selected team slot
+    public int? RequiredEvolutionCandy { get; set; }
+    public int? RequiredCandyToLevel30 { get; set; }
+    public int? RequiredDustToLevel30 { get; set; }
+    public int? TotalRequiredCandy { get; set; }
+    public int? RequiredFirstTimeMegaEnergy { get; set; }
 }
