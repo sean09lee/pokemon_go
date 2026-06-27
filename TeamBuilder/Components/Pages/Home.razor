@@ -9,235 +9,305 @@
 
 <PageTitle>Home</PageTitle>
 
-<section id="steps">
-	<p>Step 1. Download Poke Genie</p>
-	<p>Step 2. Scan all your pokemon in Pokemon Go</p>
-	<p>Step 3. Export your pokemon from Poke Genie to a csv</p>
-	<p>Step 4. Upload your exported csv Pokémon</p>
-	<p>Step 5. Set your stardust budget and candy inventory when prompted</p>
-
-	<div class="mb-3 w-50">
-		<label for="dustLimitInput" class="form-label">Stardust limit</label>
-		<input id="dustLimitInput" class="form-control" type="number" min="0" step="100"
-			   @bind="_dustLimit" @bind:event="oninput" disabled="@(_isLoading || _isTierLoading)" />
-	</div>
-
-	<div class="d-flex gap-2 align-items-center mb-3">
-		<label for="pokemonCsvInput" class="btn btn-secondary mb-0 @((_isLoading || _isTierLoading) ? "disabled" : string.Empty)">
-			@((_isLoading || _isTierLoading) ? "Processing" : "Upload CSV")
-		</label>
-		<InputFile id="pokemonCsvInput" class="d-none" OnChange="OnCsvSelected" accept=".csv" disabled="@(_isLoading || _isTierLoading)" />
-	</div>
-
-	@if (!string.IsNullOrWhiteSpace(_errorMessage))
-	{
-		<div class="alert alert-danger" role="alert">@_errorMessage</div>
-	}
-</section>
-
-@if (!string.IsNullOrWhiteSpace(_hubErrorMessage))
-{
-	<div class="alert alert-warning" role="alert">@_hubErrorMessage</div>
+@{
+	var raidSections = GetRaidTeamTypeSections().ToList();
+	var selectedRaidType = EnsureSelectedRaidTeamType(raidSections);
+	var selectedSidebar = EnsureSelectedSidebarSection(raidSections);
+	var hasActiveRaid = selectedSidebar.StartsWith(RaidSectionPrefix, StringComparison.OrdinalIgnoreCase);
+	var activeRaidSection = hasActiveRaid
+		? raidSections.FirstOrDefault(x => BuildRaidSectionKey(x.TypeKey) == selectedSidebar)
+		: default;
+	var selectedTab = hasActiveRaid && activeRaidSection.TypeKey is not null
+		? GetSelectedRaidTeamTab(activeRaidSection.TypeKey)
+		: "noInvestment";
+	var selectedTeam = hasActiveRaid && activeRaidSection.TypeKey is not null
+		? GetTeamForTab(activeRaidSection.Variants, selectedTab)
+		: [];
 }
 
-@if (_isTierLoading || _tierProgressPercent > 0)
-{
-	<div class="mb-3 w-50" aria-live="polite">
-		<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@_tierProgressPercent">
-			<div class="progress-bar @(_isTierLoading ? "progress-bar-striped progress-bar-animated" : string.Empty)"
-				 style="width: @_tierProgressPercent%;">@_tierProgressPercent%</div>
-		</div>
-		<small class="text-muted">@_tierProgressMessage</small>
-	</div>
-}
+<div class="tb-raid-page-shell">
+	<aside class="tb-raid-sidebar">
+		<button type="button"
+				class="tb-sidebar-link @(selectedSidebar == UploadSectionKey ? "active" : string.Empty)"
+				@onclick='@(() => SelectSidebarSection(UploadSectionKey))'>
+			Upload
+		</button>
+		<button type="button"
+				class="tb-sidebar-link @(selectedSidebar == HubSectionKey ? "active" : string.Empty)"
+				disabled="@(!ShowRaidSidebar)"
+				@onclick='@(() => SelectSidebarSection(HubSectionKey))'>
+			Hub Tier Lists
+		</button>
+		<button type="button"
+				class="tb-sidebar-link @(selectedSidebar == PokemonSectionKey ? "active" : string.Empty)"
+				disabled="@(!ShowRaidSidebar)"
+				@onclick='@(() => SelectSidebarSection(PokemonSectionKey))'>
+			Your Pokemon
+		</button>
 
-@if (_candyQuestions.Count > 0)
-{
-	<div class="card mb-3">
-		<div class="card-body">
-			<h5 class="card-title mb-2">Candy Questions</h5>
-			<p class="text-muted mb-3">Answer these to continue team generation.</p>
-			@foreach (var question in _candyQuestions.Values.OrderBy(x => x.IsSubmitted).ThenBy(x => x.PokemonNumber))
-			{
-				<div class="d-flex align-items-end gap-2 mb-2">
-					<div class="flex-grow-1">
-						<label class="form-label mb-1">How much @question.DisplayName candy do you have?</label>
-						<input class="form-control" type="text" inputmode="numeric" pattern="[0-9]*"
-							   @bind="question.InputValue" @bind:event="oninput" onfocus="this.select();" disabled="@question.IsSubmitted" />
-					</div>
-					<button class="btn btn-primary" @onclick="() => SubmitCandyQuestion(question)" disabled="@question.IsSubmitted">Submit</button>
-				</div>
-			}
-		</div>
-	</div>
-}
-
-@if (_allTierRows.Count > 0)
-{
-	<h2>Hub Tier Lists</h2>
-	<p class="text-muted mt-2">Loaded @_allTierRows.Count ranked entries across all attacker types.</p>
-	<details class ="mb-3">
-		<summary class="fw-semibold mb-2">Show Hub Tier Lists</summary>
-		@foreach (var section in GetHubTierSections())
+		<div class="tb-sidebar-group-title">Raid Teams</div>
+		@foreach (var section in raidSections)
 		{
-			<details class="mb-3">
-				<summary class="fw-semibold">@section.Label Tier List (@section.TierList.Count entries)</summary>
-				<div class="table-responsive mt-2">
-					<table class="table table-striped table-sm">
-						<thead>
-							<tr>
-								<th>Rank</th>
-								<th>#</th>
-								<th>Name</th>
-								<th>Form</th>
-								<th>Fast Attack</th>
-								<th>Charged Attack</th>
-								<th>DPS</th>
-								<th>TDO</th>
-								<th>Score</th>
-							</tr>
-						</thead>
-						<tbody>
-							@foreach (var pokemon in section.TierList)
-							{
-								<tr>
-									<td>@pokemon.Rank</td>
-									<td>@pokemon.PokemonNumber</td>
-									<td>@pokemon.Name</td>
-									<td>@pokemon.Form</td>
-									<td>@pokemon.FastAttack</td>
-									<td>@pokemon.ChargedAttack</td>
-									<td>@pokemon.DPS</td>
-									<td>@pokemon.TDO</td>
-									<td>@pokemon.Score</td>
-								</tr>
-							}
-						</tbody>
-					</table>
-				</div>
-			</details>
+			var sectionKey = BuildRaidSectionKey(section.TypeKey);
+			<button type="button"
+					class="tb-sidebar-link @(selectedSidebar == sectionKey ? "active" : string.Empty)"
+					disabled="@(!ShowRaidSidebar)"
+					@onclick='@(() => SelectRaidSidebar(section.TypeKey))'>
+				@section.Label
+			</button>
 		}
-	</details>
-}
+	</aside>
 
-@if (_validationFailures.Count > 0)
-{
-	<div class="alert alert-warning" role="alert">
-		Found @_validationFailures.Count validation issue(s). Invalid fields were set to null.
-	</div>
+	<section class="tb-raid-main">
+		@if (selectedSidebar == UploadSectionKey)
+		{
+			<div class="tb-home-shell">
+				<section id="steps" class="tb-hero-card mb-3">
+					<h1 class="tb-hero-title">Raid Team Builder</h1>
+					<p class="tb-hero-subtitle">Build optimized teams from your Poké Genie export in minutes.</p>
 
-	<details class="mb-3">
-		<summary class="fw-semibold">CSV Validation Issues (showing up to 50)</summary>
-		<div class="table-responsive mt-2">
-			<table class="table table-sm table-bordered">
-				<thead>
-					<tr>
-						<th>Row</th>
-						<th>Column</th>
-						<th>Value</th>
-						<th>Issue</th>
-					</tr>
-				</thead>
-				<tbody>
-					@foreach (var issue in _validationFailures.Take(50))
+					<ol class="tb-steps">
+						<li>Download Poke Genie.</li>
+						<li>Scan all your Pokémon in Pokémon GO.</li>
+						<li>Export your Pokémon from Poke Genie to CSV.</li>
+						<li>Upload your exported CSV below.</li>
+						<li>Set stardust budget and answer candy prompts.</li>
+					</ol>
+
+					<div class="tb-input-grid">
+						<div class="tb-input-item">
+							<label for="dustLimitInput" class="form-label">Stardust limit</label>
+							<input id="dustLimitInput" class="form-control" type="number" min="0" step="100"
+									   @bind="_dustLimit" @bind:event="oninput" disabled="@(_isLoading || _isTierLoading)" />
+						</div>
+						<div class="tb-input-item tb-upload-item">
+							<label for="pokemonCsvInput" class="btn btn-primary mb-0 @((_isLoading || _isTierLoading) ? "disabled" : string.Empty)">
+								@((_isLoading || _isTierLoading) ? "Processing..." : "Upload CSV")
+							</label>
+							<InputFile id="pokemonCsvInput" class="d-none" OnChange="OnCsvSelected" accept=".csv" disabled="@(_isLoading || _isTierLoading)" />
+						</div>
+					</div>
+
+					@if (!string.IsNullOrWhiteSpace(_errorMessage))
 					{
-						<tr>
-							<td>@issue.RowNumber</td>
-							<td>@issue.ColumnName</td>
-							<td>@issue.RawValue</td>
-							<td>@issue.Message</td>
-						</tr>
+						<div class="alert alert-danger mt-3 mb-0" role="alert">@_errorMessage</div>
 					}
-				</tbody>
-			</table>
-		</div>
-	</details>
+				</section>
 
-	@if (_validationFailures.Count > 50)
-	{
-		<p class="text-muted">Showing first 50 validation issues.</p>
-	}
-}
+				@if (!string.IsNullOrWhiteSpace(_hubErrorMessage))
+				{
+					<div class="alert alert-warning tb-home-alert" role="alert">@_hubErrorMessage</div>
+				}
 
-@if (_pokemon.Count > 0)
-{
-	<h2>Your Pokemon</h2>
-	<details class="mb-3">
-		<summary class="fw-semibold">Uploaded Pokémon (@_pokemon.Count)</summary>
-		<div class="table-responsive mt-2">
-			<table class="table table-striped table-sm">
-				<thead>
-					<tr>
-						<th>Index</th>
-						<th>#</th>
-						<th>Name</th>
-						<th>Form</th>
-						<th>Gender</th>
-						<th>CP</th>
-						<th>HP</th>
-						<th>Atk/Def/Sta IV</th>
-						<th>Quick Move</th>
-						<th>Charge Move</th>
-					</tr>
-				</thead>
-				<tbody>
-					@foreach (var p in _pokemon)
-					{
-						<tr>
-							<td>@p.Index</td>
-							<td>@p.PokemonNumber</td>
-							<td>@p.Name</td>
-							<td>@p.Form</td>
-							<td>@p.Gender</td>
-							<td>@p.CP</td>
-							<td>@p.HP</td>
-							<td>@($"{p.AtkIV}/{p.DefIV}/{p.StaIV}")</td>
-							<td>@p.QuickMove</td>
-							<td>@p.ChargeMove</td>
-						</tr>
-					}
-				</tbody>
-			</table>
-		</div>
-	</details>
-}
+				@if (_isTierLoading || _tierProgressPercent > 0)
+				{
+					<div class="tb-progress-card mb-3" aria-live="polite">
+						<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@_tierProgressPercent">
+							<div class="progress-bar @(_isTierLoading ? "progress-bar-striped progress-bar-animated" : string.Empty)"
+								 style="width: @_tierProgressPercent%;">@_tierProgressPercent%</div>
+						</div>
+						<small class="text-muted">@_tierProgressMessage</small>
+					</div>
+				}
 
-@if (GetRaidTeamTypeSections().Any())
-{
-	<h2>Your Raid Teams</h2>
-	@foreach (var section in GetRaidTeamTypeSections())
-	{
-		var selectedTab = GetSelectedRaidTeamTab(section.TypeKey);
-		var selectedTeam = GetTeamForTab(section.Variants, selectedTab);
-		<details class="mb-3">
-			<summary class="fw-semibold">@section.Label Raid Team</summary>
+				@if (_candyQuestions.Count > 0)
+				{
+					<div class="card mb-3 tb-content-card">
+						<div class="card-body">
+							<h5 class="card-title mb-2">Candy Questions</h5>
+							<p class="text-muted mb-3">Answer these to continue team generation.</p>
+							@foreach (var question in _candyQuestions.Values.OrderBy(x => x.IsSubmitted).ThenBy(x => x.PokemonNumber))
+							{
+								<div class="d-flex align-items-end gap-2 mb-2">
+									<div class="flex-grow-1">
+										<label class="form-label mb-1">How much @question.DisplayName candy do you have?</label>
+										<input class="form-control" type="text" inputmode="numeric" pattern="[0-9]*"
+											   @bind="question.InputValue" @bind:event="oninput" onfocus="this.select();" />
+									</div>
+									<button class="btn btn-primary" @onclick="() => SubmitCandyQuestion(question)">@(question.IsSubmitted ? "Update" : "Submit")</button>
+								</div>
+							}
 
-			<ul class="nav nav-tabs mt-2 mb-2" role="tablist">
-				<li class="nav-item" role="presentation">
-					<button type="button"
-							class="nav-link @(selectedTab == "noInvestment" ? "active" : string.Empty)"
-							@onclick='@(() => SelectRaidTeamTab(section.TypeKey, "noInvestment"))'>
-						No Investment
-					</button>
-				</li>
-				<li class="nav-item" role="presentation">
-					<button type="button"
-							class="nav-link @(selectedTab == "currentResources" ? "active" : string.Empty)"
-							@onclick='@(() => SelectRaidTeamTab(section.TypeKey, "currentResources"))'>
-						Current Resources
-					</button>
-				</li>
-				<li class="nav-item" role="presentation">
-					<button type="button"
-							class="nav-link @(selectedTab == "unlimitedResources" ? "active" : string.Empty)"
-							@onclick='@(() => SelectRaidTeamTab(section.TypeKey, "unlimitedResources"))'>
-						Unlimited Resources
-					</button>
-				</li>
-			</ul>
+							@if (ShowRaidSidebar && _pokemon.Count > 0)
+							{
+								<div class="d-flex justify-content-end mt-2">
+									<button class="btn btn-outline-light" @onclick="RecalculateRaidTeamsAsync" disabled="@(_isLoading || _isTierLoading)">
+										Recalculate Teams
+									</button>
+								</div>
+							}
+						</div>
+					</div>
+				}
+			</div>
+		}
+		else if (selectedSidebar == HubSectionKey)
+		{
+			<h2 class="tb-section-title">Hub Tier Lists</h2>
+			@if (_allTierRows.Count == 0)
+			{
+				<p class="text-muted">Upload and process a CSV to load Hub tier lists.</p>
+			}
+			else
+			{
+				<p class="text-muted mt-2">Loaded @_allTierRows.Count ranked entries across all attacker types.</p>
+				@foreach (var section in GetHubTierSections())
+				{
+					<details class="mb-3" open>
+						<summary class="fw-semibold">@section.Label Tier List (@section.TierList.Count entries)</summary>
+						<div class="table-responsive mt-2">
+							<table class="table table-striped table-sm">
+								<thead>
+									<tr>
+										<th>Rank</th>
+										<th>#</th>
+										<th>Name</th>
+										<th>Form</th>
+										<th>Fast Attack</th>
+										<th>Charged Attack</th>
+										<th>DPS</th>
+										<th>TDO</th>
+										<th>Score</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach (var pokemon in section.TierList)
+									{
+										<tr>
+											<td>@pokemon.Rank</td>
+											<td>@pokemon.PokemonNumber</td>
+											<td>@pokemon.Name</td>
+											<td>@pokemon.Form</td>
+											<td>@pokemon.FastAttack</td>
+											<td>@pokemon.ChargedAttack</td>
+											<td>@pokemon.DPS</td>
+											<td>@pokemon.TDO</td>
+											<td>@pokemon.Score</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</details>
+				}
+			}
+		}
+		else if (selectedSidebar == PokemonSectionKey)
+		{
+			<h2 class="tb-section-title">Your Pokemon</h2>
+			@if (_validationFailures.Count > 0)
+			{
+				<div class="alert alert-warning" role="alert">
+					Found @_validationFailures.Count validation issue(s). Invalid fields were set to null.
+				</div>
+
+				<details class="mb-3" open>
+					<summary class="fw-semibold">CSV Validation Issues (showing up to 50)</summary>
+					<div class="table-responsive mt-2">
+						<table class="table table-sm table-bordered">
+							<thead>
+								<tr>
+									<th>Row</th>
+									<th>Column</th>
+									<th>Value</th>
+									<th>Issue</th>
+								</tr>
+							</thead>
+							<tbody>
+								@foreach (var issue in _validationFailures.Take(50))
+								{
+									<tr>
+										<td>@issue.RowNumber</td>
+										<td>@issue.ColumnName</td>
+										<td>@issue.RawValue</td>
+										<td>@issue.Message</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				</details>
+
+				@if (_validationFailures.Count > 50)
+				{
+					<p class="text-muted">Showing first 50 validation issues.</p>
+				}
+			}
+
+			@if (_pokemon.Count == 0)
+			{
+				<p class="text-muted">Upload a CSV to view your Pokémon list.</p>
+			}
+			else
+			{
+				<details class="mb-3" open>
+					<summary class="fw-semibold">Uploaded Pokémon (@_pokemon.Count)</summary>
+					<div class="table-responsive mt-2">
+						<table class="table table-striped table-sm">
+							<thead>
+								<tr>
+									<th>Index</th>
+									<th>#</th>
+									<th>Name</th>
+									<th>Form</th>
+									<th>Gender</th>
+									<th>CP</th>
+									<th>HP</th>
+									<th>Atk/Def/Sta IV</th>
+									<th>Quick Move</th>
+									<th>Charge Move</th>
+								</tr>
+							</thead>
+							<tbody>
+								@foreach (var p in _pokemon)
+								{
+									<tr>
+										<td>@p.Index</td>
+										<td>@p.PokemonNumber</td>
+										<td>@p.Name</td>
+										<td>@p.Form</td>
+										<td>@p.Gender</td>
+										<td>@p.CP</td>
+										<td>@p.HP</td>
+										<td>@($"{p.AtkIV}/{p.DefIV}/{p.StaIV}")</td>
+										<td>@p.QuickMove</td>
+										<td>@p.ChargeMove</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				</details>
+			}
+		}
+		else if (hasActiveRaid && activeRaidSection.TypeKey is not null)
+		{
+			<h2 class="tb-section-title">Your Raid Teams</h2>
+			<div class="tb-raid-header">
+				<h3 class="mb-0">@activeRaidSection.Label Team</h3>
+				<span class="tb-raid-count">@selectedTeam.Count / 6</span>
+			</div>
+
+			<div class="tb-raid-tabs mt-2 mb-2" role="tablist">
+				<button type="button"
+						class="tb-raid-tab @(selectedTab == "noInvestment" ? "active" : string.Empty)"
+						@onclick='@(() => SelectRaidTeamTab(activeRaidSection.TypeKey, "noInvestment"))'>
+					No Investment
+				</button>
+				<button type="button"
+						class="tb-raid-tab @(selectedTab == "currentResources" ? "active" : string.Empty)"
+						@onclick='@(() => SelectRaidTeamTab(activeRaidSection.TypeKey, "currentResources"))'>
+					Current Resources
+				</button>
+				<button type="button"
+						class="tb-raid-tab @(selectedTab == "unlimitedResources" ? "active" : string.Empty)"
+						@onclick='@(() => SelectRaidTeamTab(activeRaidSection.TypeKey, "unlimitedResources"))'>
+					Unlimited Resources
+				</button>
+			</div>
 
 			<div class="table-responsive mt-2">
-				<table class="table table-striped table-sm">
+				<table class="table table-striped table-sm tb-raid-table">
 					<thead>
 						<tr>
 							<th>#</th>
@@ -271,9 +341,9 @@
 					</tbody>
 				</table>
 			</div>
-		</details>
-	}
-}
+		}
+	</section>
+</div>
 
 @code {
 	private const long MaxCsvSize = 10 * 1024 * 1024;
@@ -295,10 +365,19 @@
 	private string _tierProgressMessage = "Idle";
 	private readonly Dictionary<int, int> _candyByPokemonNumber = [];
 	private readonly Dictionary<string, string> _selectedRaidTeamTabByType = new(StringComparer.OrdinalIgnoreCase);
+	private string? _selectedRaidTeamType;
+	private string _selectedSidebarSection = UploadSectionKey;
 	private bool _isLoading;
 	private bool _isTierLoading;
 	private int _tierProgressPercent;
 	private int _dustLimit = 100000;
+
+	private const string UploadSectionKey = "upload";
+	private const string HubSectionKey = "hub";
+	private const string PokemonSectionKey = "pokemon";
+	private const string RaidSectionPrefix = "raid:";
+
+	private bool ShowRaidSidebar => !_isLoading && !_isTierLoading && _tierProgressPercent >= 100;
 
 	private async Task<HubRankingResponse?> LoadAllTierListsAsync()
 	{
@@ -418,6 +497,8 @@
 		_rankingResponse = new RankingResponse();
 		_candyQuestions.Clear();
 		_selectedRaidTeamTabByType.Clear();
+		_selectedRaidTeamType = null;
+		_selectedSidebarSection = UploadSectionKey;
 
 		try
 		{
@@ -506,11 +587,6 @@
 
 	private void SubmitCandyQuestion(CandyQuestionState question)
 	{
-		if (question.IsSubmitted)
-		{
-			return;
-		}
-
 		if (!int.TryParse(question.InputValue, out var candy) || candy < 0)
 		{
 			candy = 0;
@@ -519,6 +595,83 @@
 		question.IsSubmitted = true;
 		_candyByPokemonNumber[question.PokemonNumber] = candy;
 		question.Completion.TrySetResult(candy);
+	}
+
+	private async Task RecalculateRaidTeamsAsync()
+	{
+		if (_pokemon.Count == 0)
+		{
+			return;
+		}
+
+		try
+		{
+			_hubErrorMessage = null;
+			_isTierLoading = true;
+			_tierProgressPercent = Math.Max(60, _tierProgressPercent);
+			_tierProgressMessage = "Recalculating raid teams with updated candy...";
+
+			var hubRanking = BuildHubRankingResponseFromCachedRows() ?? await LoadAllTierListsAsync();
+			if (hubRanking is null)
+			{
+				return;
+			}
+
+			_rankingResponse = await RankingService.BuildRankingResponseAsync(
+				_pokemon,
+				hubRanking,
+				_dustLimit,
+				_candyByPokemonNumber,
+				PromptCandyAmountAsync,
+				ReportRankingProgressAsync);
+
+			_tierProgressPercent = 100;
+			_tierProgressMessage = "Completed raid team generation.";
+		}
+		catch (Exception ex)
+		{
+			_errorMessage = $"Failed to recalculate teams: {ex.Message}";
+		}
+		finally
+		{
+			_isTierLoading = false;
+		}
+	}
+
+	private HubRankingResponse? BuildHubRankingResponseFromCachedRows()
+	{
+		if (_allTierRows.Count == 0)
+		{
+			return null;
+		}
+
+		IList<HubRankedPokemon> ForType(string typeKey)
+			=> _allTierRows
+				.Where(x => string.Equals(x.AttackerType, typeKey, StringComparison.OrdinalIgnoreCase))
+				.Select(x => x.Pokemon)
+				.ToList();
+
+		return new HubRankingResponse
+		{
+			NormalTierList = ForType("normal"),
+			FireTierList = ForType("fire"),
+			WaterTierList = ForType("water"),
+			ElectricTierList = ForType("electric"),
+			GrassTierList = ForType("grass"),
+			IceTierList = ForType("ice"),
+			FightingTierList = ForType("fighting"),
+			PoisonTierList = ForType("poison"),
+			GroundTierList = ForType("ground"),
+			FlyingTierList = ForType("flying"),
+			PsychicTierList = ForType("psychic"),
+			BugTierList = ForType("bug"),
+			RockTierList = ForType("rock"),
+			GhostTierList = ForType("ghost"),
+			DragonTierList = ForType("dragon"),
+			DarkTierList = ForType("dark"),
+			SteelTierList = ForType("steel"),
+			FairyTierList = ForType("fairy")
+		};
 	}
 
 	private async Task ReportRankingProgressAsync(string stageMessage, int rankingPercent)
@@ -585,6 +738,64 @@
 	private void SelectRaidTeamTab(string attackerType, string tab)
 	{
 		_selectedRaidTeamTabByType[attackerType] = tab;
+	}
+
+	private string EnsureSelectedRaidTeamType(IList<(string TypeKey, string Label, RaidTeamVariantResult Variants)> sections)
+	{
+		if (sections.Count == 0)
+		{
+			_selectedRaidTeamType = null;
+			return string.Empty;
+		}
+
+		if (_selectedRaidTeamType is not null && sections.Any(x => x.TypeKey == _selectedRaidTeamType))
+		{
+			return _selectedRaidTeamType;
+		}
+
+		_selectedRaidTeamType = sections[0].TypeKey;
+		return _selectedRaidTeamType;
+	}
+
+	private void SelectRaidTeamType(string attackerType)
+	{
+		_selectedRaidTeamType = attackerType;
+	}
+
+	private static string BuildRaidSectionKey(string attackerType) => $"{RaidSectionPrefix}{attackerType}";
+
+	private string EnsureSelectedSidebarSection(IList<(string TypeKey, string Label, RaidTeamVariantResult Variants)> sections)
+	{
+		if (_selectedSidebarSection.StartsWith(RaidSectionPrefix, StringComparison.OrdinalIgnoreCase))
+		{
+			if (!sections.Any(x => string.Equals(BuildRaidSectionKey(x.TypeKey), _selectedSidebarSection, StringComparison.OrdinalIgnoreCase)))
+			{
+				_selectedSidebarSection = UploadSectionKey;
+			}
+		}
+
+		return _selectedSidebarSection;
+	}
+
+	private void SelectSidebarSection(string sectionKey)
+	{
+		if (!ShowRaidSidebar && sectionKey != UploadSectionKey)
+		{
+			return;
+		}
+
+		_selectedSidebarSection = sectionKey;
+	}
+
+	private void SelectRaidSidebar(string attackerType)
+	{
+		if (!ShowRaidSidebar)
+		{
+			return;
+		}
+
+		_selectedRaidTeamType = attackerType;
+		_selectedSidebarSection = BuildRaidSectionKey(attackerType);
 	}
 
 	private static IList<RankedPokemon> GetTeamForTab(RaidTeamVariantResult variants, string tab)

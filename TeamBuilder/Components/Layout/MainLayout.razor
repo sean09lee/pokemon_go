@@ -1,13 +1,17 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager NavigationManager
+
+<PageTitle>@_appTitle</PageTitle>
 
 <div class="page">
     <main>
-        <div class="top-row top-row-navbar">
+        <div class="top-row-navbar top-row">
             <nav class="top-nav">
                 <NavLink href="" Match="NavLinkMatch.All">Home</NavLink>
-                <NavLink href="iv-lookup">IV Lookup</NavLink>
+                <NavLink href="iv-lookup">IV Rank Checker</NavLink>
             </nav>
-            <span class="app-title">Pokémon Go Team Builder</span>
+            <span class="app-title">@_appTitle</span>
             <div class="top-row-spacer" aria-hidden="true"></div>
         </div>
 
@@ -22,3 +26,32 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private string _appTitle = "Pokémon Go Team Builder";
+
+    protected override void OnInitialized()
+    {
+        SetAppTitle(NavigationManager.Uri);
+        NavigationManager.LocationChanged += HandleLocationChanged;
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        SetAppTitle(e.Location);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void SetAppTitle(string uri)
+    {
+        var relative = NavigationManager.ToBaseRelativePath(uri).Trim('/');
+        _appTitle = string.Equals(relative, "iv-lookup", StringComparison.OrdinalIgnoreCase)
+            ? "IV Rank Checker"
+            : "Pokémon Go Team Builder";
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= HandleLocationChanged;
+    }
+}
