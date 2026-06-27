@@ -13,9 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\assets\images\**\*">
+    <Content Include="..\wwwroot\assets\images\**\*">
       <Link>wwwroot\assets\images\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
 
