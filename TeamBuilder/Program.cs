@@ -6,6 +6,7 @@ using Microsoft.Extensions.FileProviders;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+builder.Services.AddHealthChecks();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddScoped<CsvParserService>();
@@ -30,8 +31,14 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
-var leagueImagesPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "assets", "images"));
-if (Directory.Exists(leagueImagesPath))
+var leagueImagesCandidates = new[]
+{
+    Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "wwwroot", "assets", "images")),
+    Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "assets", "images"))
+};
+
+var leagueImagesPath = leagueImagesCandidates.FirstOrDefault(Directory.Exists);
+if (!string.IsNullOrWhiteSpace(leagueImagesPath))
 {
     app.UseStaticFiles(new StaticFileOptions
     {
@@ -45,5 +52,6 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+app.MapHealthChecks("/health");
 
 app.Run();
