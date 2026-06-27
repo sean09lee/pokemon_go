@@ -31,6 +31,7 @@ internal static class RankingHelper
         var familyNameByRoot = BuildFamilyNameByRoot(ownedList, evolutionMap);
 
         var rankedOwned = new List<RaidCandidate>();
+        var noInvestmentRankedOwned = new List<RaidCandidate>();
 
         foreach (var owned in ownedList)
         {
@@ -43,6 +44,36 @@ internal static class RankingHelper
             var familyReserveCap = GetFamilyReserveCap(familyRoot, evolutionMap, megaList);
             var requiredCandyToLevel30 = CalculateCandyRequiredToLevel30(owned, powerupRequirements);
             var requiredDustToLevel30 = CalculateDustRequiredToLevel30(owned, powerupRequirements);
+
+            var currentMatch = FindBestMatchForNumber(owned.PokemonNumber.Value, owned.Form, byNumber);
+            if (currentMatch is not null
+                && IsTargetMatchingAttackerType(currentMatch, attackerType, pokemonTypes, megaList))
+            {
+                noInvestmentRankedOwned.Add(new RaidCandidate
+                {
+                    Owned = owned,
+                    Matched = currentMatch,
+                    EvolvedOwned = null,
+                    Rank = currentMatch.Rank ?? int.MaxValue,
+                    FamilyKey = familyRoot,
+                    TargetForm = NormalizeForm(currentMatch.Form),
+                    CandyBucketPokemonNumber = familyRoot,
+                    CandyPromptName = familyNameByRoot.GetValueOrDefault(familyRoot),
+                    RequiredEvolutionCandy = 0,
+                    RequiredCandyToLevel30 = 0,
+                    RequiredDustToLevel30 = 0,
+                    TotalRequiredCandy = 0,
+                    RequiredFirstTimeMegaEnergy = 0,
+                    CurrentLevel = GetCurrentLevel(owned),
+                    CurrentCp = Math.Max(0, owned.CP ?? 0),
+                    ProjectedLevel = GetCurrentLevel(owned),
+                    ProjectedCp = Math.Max(0, owned.CP ?? 0),
+                    IsUnevolvedPlaceholder = false,
+                    UnevolvedSpeciesNumber = owned.PokemonNumber,
+                    UnevolvedReserveCap = int.MaxValue,
+                    FamilyReserveCap = familyReserveCap
+                });
+            }
 
             foreach (var option in GetRankCandidatesForOwned(owned, ownedList, byNumber, evolutionMap))
             {
@@ -101,7 +132,7 @@ internal static class RankingHelper
             .ThenByDescending(x => x.Owned.CP ?? int.MinValue)
             .ToList();
 
-        var noInvestmentOrdered = rankedOwned
+        var noInvestmentOrdered = noInvestmentRankedOwned
             .OrderByDescending(x => x.CurrentCp)
             .ThenBy(x => x.Rank)
             .ThenByDescending(x => x.Owned.IvAvg ?? int.MinValue)

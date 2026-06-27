@@ -1,0 +1,598 @@
+@page "/iv-lookup"
+@using TeamBuilder.Data.Models
+@using TeamBuilder.Services.Services
+@inject PogoApiService PogoApiService
+
+<PageTitle>IV Lookup</PageTitle>
+
+<h1>IV Rank Checker</h1>
+
+<div class="iv-lookup-shell">
+	<div class="iv-card p-3 mb-3">
+		<label for="pokemonSearch" class="form-label">Pokémon</label>
+		<input id="pokemonSearch"
+			   class="form-control"
+			   type="text"
+			   placeholder="Search by name (example: Snorlax)"
+			   @bind="_searchText"
+			   @bind:event="oninput"
+			   @onkeydown="HandlePokemonSearchKeyDown"
+			   disabled="@_isLoading" />
+
+		@if (_isLoading)
+		{
+			<small class="text-muted d-block mt-2">Loading Pokémon stats...</small>
+		}
+
+		@if (!string.IsNullOrWhiteSpace(_errorMessage))
+		{
+			<div class="alert alert-danger mt-2" role="alert">@_errorMessage</div>
+		}
+
+		@if (!_isLoading && SearchResults.Any())
+		{
+			<div class="list-group mt-2 iv-search-results">
+				@foreach (var item in SearchResults.Select((value, index) => new { value, index }))
+				{
+					<button type="button"
+							class="list-group-item list-group-item-action @(item.index == _searchKeyboardIndex ? "active" : string.Empty)"
+							@onclick="() => SelectPokemon(item.value)">
+						<div class="pokemon-search-result-content">
+							<span class="pokemon-search-result-text">@item.value.DisplayName</span>
+							<img class="pokemon-search-sprite"
+								 src="@GetPixelSpriteUrl(item.value.PokemonId)"
+								 alt="@($"{item.value.DisplayName} sprite")"
+								 loading="lazy" />
+						</div>
+					</button>
+				}
+			</div>
+		}
+	</div>
+
+	@if (_selectedPokemon is not null)
+	{
+		<div class="iv-card p-3 mb-3">
+			<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+				<h2 class="mb-0">@_selectedPokemon.DisplayName</h2>
+				<div class="league-pill">@SelectedLeagueLabel</div>
+			</div>
+
+			<div class="pokemon-hero-wrap mb-3">
+				<img class="pokemon-hero-sprite"
+					 src="@GetOfficialArtworkUrl(_selectedPokemon.PokemonId)"
+					 alt="@($"{_selectedPokemon.DisplayName} sprite")"
+					 loading="lazy" />
+			</div>
+
+			<div class="row g-2 mb-3">
+				<div class="col-md-3 col-6">
+					<div class="stat-chip">Atk: @_selectedPokemon.BaseAttack</div>
+				</div>
+				<div class="col-md-3 col-6">
+					<div class="stat-chip">Def: @_selectedPokemon.BaseDefense</div>
+				</div>
+				<div class="col-md-3 col-6">
+					<div class="stat-chip">Sta: @_selectedPokemon.BaseStamina</div>
+				</div>
+				<div class="col-md-3 col-6">
+					<div class="stat-chip">Combinations: @_rows.Count</div>
+				</div>
+			</div>
+
+			<div class="row g-2 align-items-end mb-3">
+				<div class="col-md-5 col-lg-4">
+					<label class="form-label">League</label>
+					<div class="league-dropdown">
+						<button type="button"
+								class="league-dropdown-toggle"
+								@onclick="ToggleLeagueMenu"
+								@onkeydown="HandleLeagueDropdownKeyDown"
+								@onkeydown:preventDefault="true"
+								aria-expanded="@_leagueMenuOpen"
+								aria-haspopup="listbox">
+							<img class="league-logo" src="@SelectedLeagueLogoPath" alt="@($"{SelectedLeagueLabel} logo")" />
+							<span>@SelectedLeagueLabel</span>
+							<span class="league-caret" aria-hidden="true">▾</span>
+						</button>
+						@if (_leagueMenuOpen)
+						{
+							<div class="league-dropdown-menu" role="listbox" aria-label="League options">
+								@foreach (var league in _leagues.Select((value, index) => new { value, index }))
+								{
+									<button type="button"
+											class="league-dropdown-item @(league.index == _leagueKeyboardIndex ? "active" : string.Empty)"
+											@onclick="() => SelectLeague(league.value.Cap)"
+											@onmouseover="() => _leagueKeyboardIndex = league.index"
+											role="option"
+											aria-selected="@(league.value.Cap == _selectedLeague)">
+										<img class="league-logo" src="@league.value.LogoPath" alt="@($"{league.value.Label} logo")" />
+										<span>@league.value.Label</span>
+									</button>
+								}
+							</div>
+						}
+					</div>
+				</div>
+			</div>
+
+			<div class="iv-card-inner p-3 mb-3">
+				<h3 class="h5">Check your IVs</h3>
+				<div class="row g-2 align-items-end">
+					<div class="col-md-2 col-4">
+						<label class="form-label" for="atkIvInput">Atk IV</label>
+						<input id="atkIvInput" class="form-control" type="number" min="0" max="15" step="1" @bind="_inputAtkIv" @bind:event="oninput" @bind:after="ClampAtkIv" />
+					</div>
+					<div class="col-md-2 col-4">
+						<label class="form-label" for="defIvInput">Def IV</label>
+						<input id="defIvInput" class="form-control" type="number" min="0" max="15" step="1" @bind="_inputDefIv" @bind:event="oninput" @bind:after="ClampDefIv" />
+					</div>
+					<div class="col-md-2 col-4">
+						<label class="form-label" for="staIvInput">Sta IV</label>
+						<input id="staIvInput" class="form-control" type="number" min="0" max="15" step="1" @bind="_inputStaIv" @bind:event="oninput" @bind:after="ClampStaIv" />
+					</div>
+					<div class="col-md-3 col-12">
+						<button type="button" class="btn btn-primary w-100" @onclick="FindCustomIvRank">Find Rank</button>
+					</div>
+				</div>
+
+				@if (_highlightedRow is not null)
+				{
+					<div class="iv-result-card mt-3 @GetRankToneClass(_highlightedRow.Rank, _rows.Count)">
+						<div class="iv-result-title">Your @_selectedPokemon.DisplayName is ranked @_highlightedRow.Rank of @_rows.Count</div>
+						<div class="iv-result-grid mt-2">
+							<div><span class="iv-result-label">IVs</span><span class="iv-result-value">@_highlightedRow.AtkIv/@_highlightedRow.DefIv/@_highlightedRow.StaIv</span></div>
+							<div><span class="iv-result-label">Rank</span><span class="iv-result-value">@_highlightedRow.Rank / @_rows.Count</span></div>
+							<div><span class="iv-result-label">Percentile</span><span class="iv-result-value">@_highlightedRow.Percentile.ToString("0.00")%</span></div>
+							<div><span class="iv-result-label">CP / Level</span><span class="iv-result-value">@_highlightedRow.Cp / @_highlightedRow.Level.ToString("0.0")</span></div>
+						</div>
+					</div>
+				}
+
+				@if (!string.IsNullOrWhiteSpace(_customIvMessage))
+				{
+					<div class="alert alert-warning mt-3 mb-0" role="alert">@_customIvMessage</div>
+				}
+			</div>
+
+			<div class="table-responsive">
+				<table class="table table-sm table-striped align-middle iv-rank-table">
+					<thead>
+						<tr>
+							<th>Rank</th>
+							<th>IVs</th>
+							<th>Level</th>
+							<th>CP</th>
+							<th>Atk</th>
+							<th>Def</th>
+							<th>HP</th>
+							<th>Stat Product</th>
+							<th>Percentile</th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (var row in VisibleRows)
+						{
+							<tr class="@(IsHighlightedRow(row) ? "table-success" : string.Empty)">
+								<td>@row.Rank</td>
+								<td>@row.AtkIv/@row.DefIv/@row.StaIv</td>
+								<td>@row.Level.ToString("0.0")</td>
+								<td>@row.Cp</td>
+								<td>@row.AtkStat.ToString("0.00")</td>
+								<td>@row.DefStat.ToString("0.00")</td>
+								<td>@row.Hp</td>
+								<td>@row.StatProduct</td>
+								<td>@row.Percentile.ToString("0.00")%</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+
+			@if (_rows.Count > _visibleCount)
+			{
+				<div class="d-flex justify-content-center mt-2">
+					<button class="btn btn-outline-light" @onclick="ShowMoreRows">Show more</button>
+				</div>
+			}
+		</div>
+	}
+</div>
+
+@code {
+	private sealed record LeagueOption(int Cap, string Label, string LogoPath);
+
+	private sealed class PokemonSearchItem
+	{
+		public required string Key { get; init; }
+		public required int PokemonId { get; init; }
+		public required string DisplayName { get; init; }
+		public required string SearchText { get; init; }
+		public required int BaseAttack { get; init; }
+		public required int BaseDefense { get; init; }
+		public required int BaseStamina { get; init; }
+	}
+
+	private sealed class IvRankRow
+	{
+		public required int Rank { get; init; }
+		public required int AtkIv { get; init; }
+		public required int DefIv { get; init; }
+		public required int StaIv { get; init; }
+		public required double Level { get; init; }
+		public required int Cp { get; init; }
+		public required double AtkStat { get; init; }
+		public required double DefStat { get; init; }
+		public required int Hp { get; init; }
+		public required int StatProduct { get; init; }
+		public required double Percentile { get; init; }
+	}
+
+	private static readonly LeagueOption[] _leagues =
+	[
+		new LeagueOption(500, "Little League (CP ≤ 500)", "assets/images/little_league_logo.png"),
+		new LeagueOption(1500, "Great League (CP ≤ 1500)", "assets/images/great_league_logo.png"),
+		new LeagueOption(2500, "Ultra League (CP ≤ 2500)", "assets/images/ultimate_league_logo.jpg"),
+		new LeagueOption(0, "Master League (No CP cap)", "assets/images/master_league_logo.png")
+	];
+
+	private readonly List<PokemonSearchItem> _pokemonOptions = [];
+	private readonly List<IvRankRow> _rows = [];
+
+	private PokemonSearchItem? _selectedPokemon;
+	private IvRankRow? _highlightedRow;
+	private string _searchText = string.Empty;
+	private string? _errorMessage;
+	private string? _customIvMessage;
+	private int _selectedLeague = 1500;
+	private int _inputAtkIv;
+	private int _inputDefIv;
+	private int _inputStaIv;
+	private int _visibleCount = 200;
+	private bool _isLoading;
+	private bool _leagueMenuOpen;
+	private int _leagueKeyboardIndex = -1;
+	private int _searchKeyboardIndex = -1;
+
+	private IEnumerable<PokemonSearchItem> SearchResults
+	{
+		get
+		{
+			var term = _searchText.Trim();
+			if (string.IsNullOrWhiteSpace(term) || _selectedPokemon is not null && string.Equals(term, _selectedPokemon.DisplayName, StringComparison.OrdinalIgnoreCase))
+			{
+				return [];
+			}
+
+			return _pokemonOptions
+				.Where(x => x.SearchText.Contains(term, StringComparison.OrdinalIgnoreCase))
+				.Take(10)
+				.ToList();
+		}
+	}
+
+	private IEnumerable<IvRankRow> VisibleRows => _rows.Take(_visibleCount);
+
+	private string SelectedLeagueLabel => _leagues.First(x => x.Cap == _selectedLeague).Label;
+	private string SelectedLeagueLogoPath => _leagues.First(x => x.Cap == _selectedLeague).LogoPath;
+
+	protected override async Task OnInitializedAsync()
+	{
+		_isLoading = true;
+		try
+		{
+			var stats = await PogoApiService.GetPokemonStatsDataAsync();
+			var options = stats
+				.Where(x => x.PokemonId.HasValue
+					&& !string.IsNullOrWhiteSpace(x.PokemonName)
+					&& x.BaseAttack.HasValue
+					&& x.BaseDefense.HasValue
+					&& x.BaseStamina.HasValue)
+				.Select(x => new PokemonSearchItem
+				{
+					Key = $"{x.PokemonId}:{x.Form ?? "Normal"}",
+					PokemonId = x.PokemonId!.Value,
+					DisplayName = BuildDisplayName(x),
+					SearchText = BuildSearchText(x),
+					BaseAttack = x.BaseAttack!.Value,
+					BaseDefense = x.BaseDefense!.Value,
+					BaseStamina = x.BaseStamina!.Value
+				})
+				.GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+				.Select(x => x.First())
+				.OrderBy(x => x.DisplayName)
+				.ToList();
+
+			_pokemonOptions.AddRange(options);
+		}
+		catch (Exception ex)
+		{
+			_errorMessage = $"Failed to load Pokémon stats: {ex.Message}";
+		}
+		finally
+		{
+			_isLoading = false;
+		}
+	}
+
+	private static string BuildDisplayName(PokemonStatsInfo pokemon)
+	{
+		var form = string.IsNullOrWhiteSpace(pokemon.Form) ? "Normal" : pokemon.Form;
+		return $"#{pokemon.PokemonId} {pokemon.PokemonName} ({form})";
+	}
+
+	private static string BuildSearchText(PokemonStatsInfo pokemon)
+	{
+		var form = pokemon.Form ?? "Normal";
+		return $"{pokemon.PokemonName} {pokemon.PokemonId} {form}";
+	}
+
+	private static string GetPixelSpriteUrl(int pokemonId)
+	{
+		return $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{pokemonId}.png";
+	}
+
+	private static string GetOfficialArtworkUrl(int pokemonId)
+	{
+		return $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{pokemonId}.png";
+	}
+
+	private void SelectPokemon(PokemonSearchItem item)
+	{
+		_selectedPokemon = item;
+		_searchText = item.DisplayName;
+		_searchKeyboardIndex = -1;
+		_highlightedRow = null;
+		_customIvMessage = null;
+		RecalculateRanks();
+	}
+
+	private void RecalculateRanks()
+	{
+		_leagueMenuOpen = false;
+
+		if (_selectedPokemon is null)
+		{
+			return;
+		}
+
+		var result = IndividualValueService.Calculate(
+			_selectedPokemon.BaseAttack,
+			_selectedPokemon.BaseDefense,
+			_selectedPokemon.BaseStamina,
+			0,
+			1,
+			51,
+			false,
+			_selectedLeague,
+			_selectedPokemon.DisplayName,
+			false);
+
+		_rows.Clear();
+		var rank = 1;
+		var denominator = Math.Max(1, result.NumRanks - 1);
+
+		foreach (var (_, bucket) in result.SortedRanks)
+		{
+			foreach (var entry in bucket)
+			{
+				var percentile = result.NumRanks <= 1
+					? 100d
+					: (1d - ((rank - 1d) / denominator)) * 100d;
+
+				_rows.Add(new IvRankRow
+				{
+					Rank = rank,
+					AtkIv = entry.IVs.A,
+					DefIv = entry.IVs.D,
+					StaIv = entry.IVs.S,
+					Level = entry.L,
+					Cp = entry.CP,
+					AtkStat = entry.Battle.A,
+					DefStat = entry.Battle.D,
+					Hp = entry.Battle.S,
+					StatProduct = (int)Math.Round(entry.Battle.A * entry.Battle.D * entry.Battle.S),
+					Percentile = percentile
+				});
+
+				rank++;
+			}
+		}
+
+		_visibleCount = 200;
+	}
+
+	private void FindCustomIvRank()
+	{
+		if (_selectedPokemon is null)
+		{
+			_customIvMessage = "Select a Pokémon first.";
+			return;
+		}
+
+		if (!IsValidIv(_inputAtkIv) || !IsValidIv(_inputDefIv) || !IsValidIv(_inputStaIv))
+		{
+			_customIvMessage = "IV values must be between 0 and 15.";
+			return;
+		}
+
+		var row = _rows.FirstOrDefault(x => x.AtkIv == _inputAtkIv && x.DefIv == _inputDefIv && x.StaIv == _inputStaIv);
+		if (row is null)
+		{
+			_customIvMessage = "No rank found for that IV set in the selected league.";
+			_highlightedRow = null;
+			return;
+		}
+
+		_highlightedRow = row;
+		if (row.Rank > _visibleCount)
+		{
+			_visibleCount = Math.Min(_rows.Count, row.Rank + 25);
+		}
+
+		_customIvMessage = null;
+	}
+
+	private bool IsHighlightedRow(IvRankRow row)
+	{
+		return _highlightedRow is not null
+			&& row.AtkIv == _highlightedRow.AtkIv
+			&& row.DefIv == _highlightedRow.DefIv
+			&& row.StaIv == _highlightedRow.StaIv;
+	}
+
+	private void ShowMoreRows()
+	{
+		_visibleCount = Math.Min(_rows.Count, _visibleCount + 200);
+	}
+
+	private void ToggleLeagueMenu()
+	{
+		_leagueMenuOpen = !_leagueMenuOpen;
+		if (_leagueMenuOpen)
+		{
+			_leagueKeyboardIndex = GetLeagueIndex(_selectedLeague);
+		}
+	}
+
+	private void SelectLeague(int leagueCap)
+	{
+		_selectedLeague = leagueCap;
+		_leagueKeyboardIndex = GetLeagueIndex(leagueCap);
+		_leagueMenuOpen = false;
+		RecalculateRanks();
+	}
+
+	private void HandleLeagueDropdownKeyDown(KeyboardEventArgs e)
+	{
+		if (_leagues.Length == 0)
+		{
+			return;
+		}
+
+		switch (e.Key)
+		{
+			case "ArrowDown":
+				if (!_leagueMenuOpen)
+				{
+					_leagueMenuOpen = true;
+					_leagueKeyboardIndex = GetLeagueIndex(_selectedLeague);
+				}
+				else
+				{
+					_leagueKeyboardIndex = (_leagueKeyboardIndex + 1 + _leagues.Length) % _leagues.Length;
+				}
+				break;
+
+			case "ArrowUp":
+				if (!_leagueMenuOpen)
+				{
+					_leagueMenuOpen = true;
+					_leagueKeyboardIndex = GetLeagueIndex(_selectedLeague);
+				}
+				else
+				{
+					_leagueKeyboardIndex = (_leagueKeyboardIndex - 1 + _leagues.Length) % _leagues.Length;
+				}
+				break;
+
+			case "Enter":
+				if (!_leagueMenuOpen)
+				{
+					_leagueMenuOpen = true;
+					_leagueKeyboardIndex = GetLeagueIndex(_selectedLeague);
+				}
+				else if (_leagueKeyboardIndex >= 0 && _leagueKeyboardIndex < _leagues.Length)
+				{
+					SelectLeague(_leagues[_leagueKeyboardIndex].Cap);
+				}
+				break;
+
+			case "Escape":
+				_leagueMenuOpen = false;
+				break;
+		}
+	}
+
+	private void HandlePokemonSearchKeyDown(KeyboardEventArgs e)
+	{
+		var results = SearchResults.ToList();
+		if (results.Count == 0)
+		{
+			_searchKeyboardIndex = -1;
+			return;
+		}
+
+		switch (e.Key)
+		{
+			case "ArrowDown":
+				_searchKeyboardIndex = (_searchKeyboardIndex + 1 + results.Count) % results.Count;
+				break;
+			case "ArrowUp":
+				_searchKeyboardIndex = (_searchKeyboardIndex - 1 + results.Count) % results.Count;
+				break;
+			case "Enter":
+				if (_searchKeyboardIndex >= 0 && _searchKeyboardIndex < results.Count)
+				{
+					SelectPokemon(results[_searchKeyboardIndex]);
+				}
+				break;
+			case "Escape":
+				_searchKeyboardIndex = -1;
+				break;
+		}
+	}
+
+	private static int GetLeagueIndex(int leagueCap)
+	{
+		for (var i = 0; i < _leagues.Length; i++)
+		{
+			if (_leagues[i].Cap == leagueCap)
+			{
+				return i;
+			}
+		}
+
+		return 0;
+	}
+
+	private static string GetRankToneClass(int rank, int total)
+	{
+		var totalRanks = Math.Max(1, total);
+		var ratio = rank / (double)totalRanks;
+
+		if (ratio <= 0.10d)
+		{
+			return "iv-rank-tone-green";
+		}
+
+		if (ratio <= 0.25d)
+		{
+			return "iv-rank-tone-blue";
+		}
+
+		if (ratio <= 0.50d)
+		{
+			return "iv-rank-tone-yellow";
+		}
+
+		return "iv-rank-tone-red";
+	}
+
+	private void ClampAtkIv()
+	{
+		_inputAtkIv = Math.Clamp(_inputAtkIv, 0, 15);
+	}
+
+	private void ClampDefIv()
+	{
+		_inputDefIv = Math.Clamp(_inputDefIv, 0, 15);
+	}
+
+	private void ClampStaIv()
+	{
+		_inputStaIv = Math.Clamp(_inputStaIv, 0, 15);
+	}
+
+	private static bool IsValidIv(int value) => value is >= 0 and <= 15;
+}

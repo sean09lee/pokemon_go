@@ -12,4 +12,11 @@
     <ProjectReference Include="..\TeamBuilder.Services\TeamBuilder.Services.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\assets\images\**\*">
+      <Link>wwwroot\assets\images\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

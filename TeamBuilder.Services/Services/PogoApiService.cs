@@ -22,6 +22,36 @@ public class PogoApiService(PogoHelpers pogoHelpers)
   public Task<PogoApiResponse> GetAlolanPokemonAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("alolan_pokemon.json", cancellationToken);
   public Task<PogoApiResponse> GetPossibleDittoPokemonAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("possible_ditto_pokemon.json", cancellationToken);
   public Task<PogoApiResponse> GetPokemonStatsAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("pokemon_stats.json", cancellationToken);
+  public async Task<IList<PokemonStatsInfo>> GetPokemonStatsDataAsync(CancellationToken cancellationToken = default)
+    {
+      var stats = await _helper.GetTypedJsonAsync<IList<PokemonStatsInfo>>("pokemon_stats.json", cancellationToken) ?? [];
+      if (stats.Count == 0)
+      {
+        return stats;
+      }
+
+      var filtered = new List<PokemonStatsInfo>();
+
+      foreach (var group in stats
+        .Where(x => x.PokemonId.HasValue)
+        .GroupBy(x => x.PokemonId!.Value))
+      {
+        var allowedForms = group.Where(IsAllowedStatForm).ToList();
+        if (allowedForms.Count > 0)
+        {
+          filtered.AddRange(allowedForms);
+        }
+        else
+        {
+          filtered.Add(group.First());
+        }
+      }
+
+      // Keep entries that do not have a Pokémon number, unchanged.
+      filtered.AddRange(stats.Where(x => !x.PokemonId.HasValue));
+
+      return filtered;
+    }
   public Task<PogoApiResponse> GetFastMovesAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("fast_moves.json", cancellationToken);
   public Task<PogoApiResponse> GetChargedMovesAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("charged_moves.json", cancellationToken);
   public Task<PogoApiResponse> GetPokemonMaxCpAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("pokemon_max_cp.json", cancellationToken);
@@ -72,4 +102,19 @@ public class PogoApiService(PogoHelpers pogoHelpers)
   public Task<PogoApiResponse> GetPvpChargedMovesAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("pvp_charged_moves.json", cancellationToken);
   public Task<PogoApiResponse> GetTimeLimitedShinyPokemonAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("time_limited_shiny_pokemon.json", cancellationToken);
   public Task<PogoApiResponse> GetPhotobombExclusivePokemonAsync(CancellationToken cancellationToken = default) => _helper.GetJsonAsync("photobomb_exclusive_pokemon.json", cancellationToken);
+
+  private static bool IsAllowedStatForm(PokemonStatsInfo pokemon)
+  {
+      var form = pokemon.Form?.Trim();
+      if (string.IsNullOrWhiteSpace(form))
+      {
+          return true; // treat blank as Normal
+      }
+
+      return form.Equals("normal", StringComparison.OrdinalIgnoreCase)
+          || form.Equals("hisuian", StringComparison.OrdinalIgnoreCase)
+          || form.Equals("galarian", StringComparison.OrdinalIgnoreCase)
+          || form.Equals("alola", StringComparison.OrdinalIgnoreCase)
+          || form.Equals("alolan", StringComparison.OrdinalIgnoreCase);
+  }
 }

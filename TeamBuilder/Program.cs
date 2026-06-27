@@ -1,6 +1,7 @@
 using TeamBuilder.Components;
 using TeamBuilder.Services.Helpers;
 using TeamBuilder.Services.Services;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +29,16 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+
+var leagueImagesPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "assets", "images"));
+if (Directory.Exists(leagueImagesPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(leagueImagesPath),
+        RequestPath = "/assets/images"
+    });
+}
 
 app.UseAntiforgery();
 

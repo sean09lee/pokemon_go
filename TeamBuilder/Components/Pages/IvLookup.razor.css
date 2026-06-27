@@ -1,0 +1,229 @@
+.iv-lookup-shell {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.iv-card {
+    background: linear-gradient(180deg, #232a33 0%, #1f252d 100%);
+    border: 1px solid #3a414a;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    max-width: 980px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.iv-card-inner {
+    background: #1a2028;
+    border: 1px solid #39414b;
+    border-radius: 10px;
+}
+
+.iv-search-results {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.iv-search-results .list-group-item {
+    background-color: #252c35;
+    color: #e6e6e6;
+    border-color: #38414b;
+}
+
+.iv-search-results .list-group-item:hover {
+    background-color: #313a45;
+}
+
+.iv-search-results .list-group-item.active {
+    background-color: #3a4554;
+    border-color: #536174;
+    color: #ffffff;
+}
+
+.pokemon-search-result-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.pokemon-search-result-text {
+    text-align: left;
+}
+
+.pokemon-search-sprite {
+    width: 42px;
+    height: 42px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+
+.pokemon-hero-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.pokemon-hero-sprite {
+    width: 160px;
+    height: 160px;
+    object-fit: contain;
+    image-rendering: auto;
+}
+
+.league-pill {
+    font-size: 0.85rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid #4b5664;
+    border-radius: 999px;
+    color: #d7e4ff;
+    background: #2b3440;
+}
+
+.league-dropdown {
+    position: relative;
+}
+
+.league-dropdown-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    border: 1px solid #3a414a;
+    border-radius: 8px;
+    background-color: #2a3038;
+    color: #e6e6e6;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+}
+
+.league-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    right: 0;
+    background: #232a33;
+    border: 1px solid #3a414a;
+    border-radius: 8px;
+    z-index: 20;
+    overflow: hidden;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+.league-dropdown-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    border: 0;
+    border-bottom: 1px solid #323944;
+    background: transparent;
+    color: #e6e6e6;
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+}
+
+.league-dropdown-item:last-child {
+    border-bottom: 0;
+}
+
+.league-dropdown-item:hover,
+.league-dropdown-toggle:hover {
+    background-color: #313a45;
+}
+
+.league-dropdown-item.active {
+    background-color: #3a4554;
+}
+
+.league-logo {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.league-caret {
+    margin-left: auto;
+    opacity: 0.8;
+}
+
+.stat-chip {
+    border: 1px solid #404a56;
+    border-radius: 8px;
+    background: #212831;
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+}
+
+.iv-result-card {
+    border-radius: 10px;
+    border: 1px solid transparent;
+    padding: 0.85rem 1rem;
+}
+
+.iv-result-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.iv-result-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem 1rem;
+}
+
+.iv-result-label {
+    display: block;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.9;
+}
+
+.iv-result-value {
+    display: block;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.iv-rank-tone-green {
+    background: linear-gradient(180deg, #1f3b2a 0%, #1a2f23 100%);
+    border-color: #3ba55d;
+    color: #e7ffef;
+}
+
+.iv-rank-tone-blue {
+    background: linear-gradient(180deg, #1d2f4f 0%, #17263f 100%);
+    border-color: #4f86d9;
+    color: #e8f1ff;
+}
+
+.iv-rank-tone-yellow {
+    background: linear-gradient(180deg, #4a3e1f 0%, #3b3118 100%);
+    border-color: #d6a737;
+    color: #fff7df;
+}
+
+.iv-rank-tone-red {
+    background: linear-gradient(180deg, #472225 0%, #3a1b1d 100%);
+    border-color: #d45a66;
+    color: #ffe9ec;
+}
+
+@media (max-width: 640.98px) {
+    .iv-result-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.iv-rank-table thead th {
+    white-space: nowrap;
+}
+
+#pokemonSearch::placeholder {
+    color: #d3d3d3;
+    opacity: 1;
+}
