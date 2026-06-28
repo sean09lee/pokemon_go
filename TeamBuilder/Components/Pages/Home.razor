@@ -99,7 +99,7 @@
 					<div class="alert alert-warning tb-home-alert" role="alert">@_hubErrorMessage</div>
 				}
 
-				@if (_isTierLoading || _tierProgressPercent > 0)
+				@if (_isTierLoading || (_tierProgressPercent > 0 && !_tierProgressHalted))
 				{
 					<div class="tb-progress-card mb-3" aria-live="polite">
 						<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@_tierProgressPercent">
@@ -107,6 +107,17 @@
 								 style="width: @_tierProgressPercent%;">@_tierProgressPercent%</div>
 						</div>
 						<small class="text-muted">@_tierProgressMessage</small>
+					</div>
+				}
+
+				@if (_tierProgressHalted)
+				{
+					<div class="alert alert-danger tb-home-alert" role="alert">
+						<strong>Processing stopped.</strong>
+						@if (!string.IsNullOrWhiteSpace(_tierProgressMessage))
+						{
+							<span> @_tierProgressMessage</span>
+						}
 					</div>
 				}
 
@@ -370,6 +381,8 @@
 	private bool _isLoading;
 	private bool _isTierLoading;
 	private int _tierProgressPercent;
+	private bool _tierProgressHalted;
+	private CancellationTokenSource? _processingCts;
 	private int _dustLimit = 100000;
 
 	private const string UploadSectionKey = "upload";
@@ -379,13 +392,15 @@
 
 	private bool ShowRaidSidebar => !_isLoading && !_isTierLoading && _tierProgressPercent >= 100;
 
-	private async Task<HubRankingResponse?> LoadAllTierListsAsync()
+	private async Task<HubRankingResponse?> LoadAllTierListsAsync(CancellationToken cancellationToken)
 	{
 		_hubErrorMessage = null;
 
 		try
 		{
+			cancellationToken.ThrowIfCancellationRequested();
 			_isTierLoading = true;
+			_tierProgressHalted = false;
 			_tierProgressPercent = 0;
 			_tierProgressMessage = "Preparing Hub tier list crawl...";
 			_allTierRows.Clear();
@@ -395,11 +410,15 @@
 
 			for (var i = 0; i < _attackerTypes.Length; i++)
 			{
+				cancellationToken.ThrowIfCancellationRequested();
 				var attackerType = _attackerTypes[i];
 				_tierProgressMessage = $"Processing '{attackerType}' tier list ({i + 1}/{_attackerTypes.Length})...";
 				await InvokeAsync(StateHasChanged);
 
-				var tierList = await HubApiService.CrawlBestPerTypeAsync(attackerType, 200);
+				using var perTypeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+				perTypeCts.CancelAfter(TimeSpan.FromSeconds(120));
+
+				var tierList = await HubApiService.CrawlBestPerTypeAsync(attackerType, 200, perTypeCts.Token);
 				tierMap[attackerType] = tierList;
 				AddTierRows(attackerType, tierList);
 
@@ -442,10 +461,22 @@
 				FairyTierList = tierMap.GetValueOrDefault("fairy") ?? []
 			};
 		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			_hubErrorMessage = "Tier-list loading was canceled.";
+			HaltProgress("Tier-list loading was canceled.");
+			return null;
+		}
+		catch (OperationCanceledException)
+		{
+			_hubErrorMessage = "Tier-list loading timed out while waiting for Hub data.";
+			HaltProgress("A Hub request timed out. Please try again.");
+			return null;
+		}
 		catch (Exception ex)
 		{
 			_hubErrorMessage = $"Failed to load Hub tier lists: {ex.Message}";
-			_tierProgressMessage = "Stopped due to an error.";
+			HaltProgress("Stopped due to an error while loading Hub tier lists.");
 			return null;
 		}
 		finally
@@ -490,8 +521,14 @@
 
 	private async Task OnCsvSelected(InputFileChangeEventArgs e)
 	{
+		_processingCts?.Cancel();
+		_processingCts?.Dispose();
+		_processingCts = new CancellationTokenSource(TimeSpan.FromMinutes(8));
+		var cancellationToken = _processingCts.Token;
+
 		_errorMessage = null;
 		_hubErrorMessage = null;
+		_tierProgressHalted = false;
 		_pokemon.Clear();
 		_validationFailures.Clear();
 		_rankingResponse = new RankingResponse();
@@ -502,6 +539,7 @@
 
 		try
 		{
+			cancellationToken.ThrowIfCancellationRequested();
 			_isLoading = true;
 			_isTierLoading = true;
 			_tierProgressPercent = 0;
@@ -509,12 +547,13 @@
 			var file = e.File;
 			_uploadedFileName = file.Name;
 
-			await using var stream = file.OpenReadStream(MaxCsvSize);
-			var parseResult = await CsvParserService.ParsePokemonCsvAsync(stream);
+			await using var stream = file.OpenReadStream(MaxCsvSize, cancellationToken);
+			var parseResult = await CsvParserService.ParsePokemonCsvAsync(stream, cancellationToken);
 
 			if (!string.IsNullOrWhiteSpace(parseResult.FatalError))
 			{
 				_errorMessage = parseResult.FatalError;
+				HaltProgress("CSV processing stopped because the uploaded file could not be parsed.");
 				return;
 			}
 
@@ -523,10 +562,11 @@
 
 			if (_pokemon.Count == 0)
 			{
+				HaltProgress("CSV processing stopped because no Pokémon rows were found.");
 				return;
 			}
 
-			var hubRanking = await LoadAllTierListsAsync();
+			var hubRanking = await LoadAllTierListsAsync(cancellationToken);
 			if (hubRanking is null)
 			{
 				return;
@@ -537,7 +577,8 @@
 				_dustLimit,
 				_candyByPokemonNumber,
 				PromptCandyAmountAsync,
-				ReportRankingProgressAsync);
+				ReportRankingProgressAsync,
+				cancellationToken);
 
 			_tierProgressPercent = 100;
 			_tierProgressMessage = "Completed raid team generation.";
@@ -547,14 +588,27 @@
 				_hubErrorMessage = "No owned Pokémon were found in the current Hub tier lists.";
 			}
 		}
+		catch (OperationCanceledException) when (_processingCts?.IsCancellationRequested == true)
+		{
+			_errorMessage = "Processing timed out. Please try again.";
+			HaltProgress("Processing timed out before completion.");
+		}
+		catch (OperationCanceledException)
+		{
+			_errorMessage = "Processing was canceled.";
+			HaltProgress("Processing was canceled.");
+		}
 		catch (Exception ex)
 		{
 			_errorMessage = $"Failed to parse CSV: {ex.Message}";
+			HaltProgress("Processing stopped due to an unexpected error.");
 		}
 		finally
 		{
 			_isLoading = false;
 			_isTierLoading = false;
+			_processingCts?.Dispose();
+			_processingCts = null;
 		}
 	}
 
@@ -604,14 +658,21 @@
 			return;
 		}
 
+		_processingCts?.Cancel();
+		_processingCts?.Dispose();
+		_processingCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+		var cancellationToken = _processingCts.Token;
+
 		try
 		{
+			cancellationToken.ThrowIfCancellationRequested();
 			_hubErrorMessage = null;
+			_tierProgressHalted = false;
 			_isTierLoading = true;
 			_tierProgressPercent = Math.Max(60, _tierProgressPercent);
 			_tierProgressMessage = "Recalculating raid teams with updated candy...";
 
-			var hubRanking = BuildHubRankingResponseFromCachedRows() ?? await LoadAllTierListsAsync();
+			var hubRanking = BuildHubRankingResponseFromCachedRows() ?? await LoadAllTierListsAsync(cancellationToken);
 			if (hubRanking is null)
 			{
 				return;
@@ -623,19 +684,40 @@
 				_dustLimit,
 				_candyByPokemonNumber,
 				PromptCandyAmountAsync,
-				ReportRankingProgressAsync);
+				ReportRankingProgressAsync,
+				cancellationToken);
 
 			_tierProgressPercent = 100;
 			_tierProgressMessage = "Completed raid team generation.";
 		}
+		catch (OperationCanceledException) when (_processingCts?.IsCancellationRequested == true)
+		{
+			_errorMessage = "Recalculation timed out. Please try again.";
+			HaltProgress("Recalculation timed out before completion.");
+		}
+		catch (OperationCanceledException)
+		{
+			_errorMessage = "Recalculation was canceled.";
+			HaltProgress("Recalculation was canceled.");
+		}
 		catch (Exception ex)
 		{
 			_errorMessage = $"Failed to recalculate teams: {ex.Message}";
+			HaltProgress("Recalculation stopped due to an unexpected error.");
 		}
 		finally
 		{
 			_isTierLoading = false;
+			_processingCts?.Dispose();
+			_processingCts = null;
 		}
+	}
+
+	private void HaltProgress(string message)
+	{
+		_tierProgressHalted = true;
+		_tierProgressPercent = 0;
+		_tierProgressMessage = message;
 	}
 
 	private HubRankingResponse? BuildHubRankingResponseFromCachedRows()

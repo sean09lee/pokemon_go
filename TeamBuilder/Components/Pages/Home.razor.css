@@ -76,6 +76,10 @@
     color: #ffffff;
 }
 
+.tb-content-card .form-label {
+    color: #dbe8f6;
+}
+
 .tb-raid-page-shell {
     max-width: 1320px;
     margin: 0 auto;

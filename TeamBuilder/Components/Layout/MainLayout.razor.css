@@ -10,10 +10,6 @@ main {
     flex: 1;
 }
 
-.top-row-navbar {
-    padding-left: 0 !important;
-}
-
 .top-row {
     background-color: #262b31;
     border-bottom: 1px solid #3a414a;
@@ -130,7 +126,7 @@ main {
     }
 
     .top-row, article {
-        padding-left: 2rem !important;
+        padding-left: 0rem !important;
         padding-right: 1.5rem !important;
     }
 }

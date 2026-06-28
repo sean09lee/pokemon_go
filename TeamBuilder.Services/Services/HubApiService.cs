@@ -10,6 +10,7 @@ namespace TeamBuilder.Services.Services;
 public class HubApiService(CacheService cacheService)
 {
   private readonly CacheService _cacheService = cacheService;
+  private static readonly TimeSpan DefaultHubTimeout = TimeSpan.FromSeconds(90);
 
   public async Task<IList<HubRankedPokemon>> CrawlBestPerTypeAsync(string attackerType, int limit = 200, CancellationToken cancellationToken = default)
   {
@@ -24,37 +25,57 @@ public class HubApiService(CacheService cacheService)
 
     var url = $"https://db.pokemongohub.net/pokemon-list/best-per-type/{attackerType}";
 
-    using var playwright = await Playwright.CreateAsync();
-    await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    timeoutCts.CancelAfter(DefaultHubTimeout);
+
+    try
     {
-      Headless = true
-    });
+      using var playwright = await Playwright.CreateAsync();
+      await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+      {
+        Headless = true,
+        Timeout = (float)DefaultHubTimeout.TotalMilliseconds
+      });
 
-    var context = await browser.NewContextAsync(new BrowserNewContextOptions
+      var context = await browser.NewContextAsync(new BrowserNewContextOptions
+      {
+        UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
+      });
+
+      context.SetDefaultTimeout((float)DefaultHubTimeout.TotalMilliseconds);
+      var page = await context.NewPageAsync();
+      await page.GotoAsync(url, new PageGotoOptions
+      {
+        WaitUntil = WaitUntilState.NetworkIdle,
+        Timeout = (float)DefaultHubTimeout.TotalMilliseconds
+      });
+
+      timeoutCts.Token.ThrowIfCancellationRequested();
+      await HubHelpers.SetRowsLimitAsync(page, limit);
+      await page.WaitForTimeoutAsync(1200);
+
+      timeoutCts.Token.ThrowIfCancellationRequested();
+      var pokemon = await HubHelpers.ExtractRankedPokemonAsync(page, limit, timeoutCts.Token);
+
+      var ranked = pokemon
+        .GroupBy(x => $"{x.PokemonNumber}|{x.Name}|{x.Form}")
+        .Select(x => x.First())
+        .Take(limit)
+        .ToList();
+
+      await _cacheService.SaveAsync(cacheKey, ranked, cancellationToken);
+
+      return ranked;
+    }
+    catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
     {
-      UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
-    });
-
-    var page = await context.NewPageAsync();
-    await page.GotoAsync(url, new PageGotoOptions
+      throw new TimeoutException($"Hub request timed out while processing attacker type '{attackerType}'.");
+    }
+    catch (PlaywrightException ex)
     {
-      WaitUntil = WaitUntilState.NetworkIdle,
-      Timeout = 90000
-    });
-
-    await HubHelpers.SetRowsLimitAsync(page, limit);
-    await page.WaitForTimeoutAsync(1200);
-
-    var pokemon = await HubHelpers.ExtractRankedPokemonAsync(page, limit, cancellationToken);
-
-    var ranked = pokemon
-      .GroupBy(x => $"{x.PokemonNumber}|{x.Name}|{x.Form}")
-      .Select(x => x.First())
-      .Take(limit)
-      .ToList();
-
-    await _cacheService.SaveAsync(cacheKey, ranked, cancellationToken);
-
-    return ranked;
+      throw new InvalidOperationException(
+        $"Failed to crawl Hub for attacker type '{attackerType}'. Ensure Playwright Chromium is installed on the server and outbound HTTPS is allowed. {ex.Message}",
+        ex);
+    }
   }
 }
