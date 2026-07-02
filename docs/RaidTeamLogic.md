@@ -36,6 +36,14 @@ A candidate is eligible only if its effective typing matches the requested attac
 
 Form matching must be strict and safe. Do not mix unrelated forms.
 
+### Single Mega/Primal Per Team
+
+Each generated raid team can include at most one mega or primal target.
+
+- If no valid mega/primal candidate exists, the team can have none.
+- If one or more valid mega/primal candidates exist, the selected mega/primal must be the highest-ranked mega/primal candidate for that team build.
+- This applies to all three variants: No Investment, Current Resources, and Unlimited Resources.
+
 ### Unevolved Slot Cap by Mega Count
 
 If a selected entry is unevolved (base or mid-stage used as a placeholder for a final ranked target), the number of slots allowed for that unevolved species is capped by:
@@ -110,6 +118,8 @@ Build toward ideal ranking while still using high-CP Pokémon you already have.
 
 - Start from highest-ranked candidates.
 - Spend current candy and stardust to improve them.
+- If a selected member targets an evolution (owned number != target number), reserve that evolution candy from the family candy bucket before any power-up investment.
+- Do not include a candidate that requires evolution candy when the current family candy bucket cannot pay the required evolution cost.
 - Split investment equally across the 6 selected members.
 - After investment, allow lower-ranked alternatives with CP > 1000 to replace weakest slots.
 

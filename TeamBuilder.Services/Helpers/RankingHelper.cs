@@ -162,7 +162,6 @@ internal static class RankingHelper
             .Where(x => !externallyReserved.Contains(GetOwnedUniqueKey(x)))
             .ToList();
         var unlimited = SelectWithTeamConstraints(unlimitedPool, 6, enforceFamilyMegaCap: true);
-        unlimited = EnsureMegaFormCoverage(unlimited, unlimitedPool, 6);
         foreach (var key in unlimited.Select(GetOwnedUniqueKey))
         {
             globallyReservedOwnedKeys?.Add(key);
@@ -185,7 +184,7 @@ internal static class RankingHelper
         Func<int, string?, CancellationToken, Task<int>>? resolveCandyAsync,
         CancellationToken cancellationToken)
     {
-        var selected = coreSix.Select(CloneCandidate).ToList();
+        IList<RaidCandidate> selected = coreSix.Select(CloneCandidate).ToList();
         if (selected.Count == 0)
         {
             return selected;
@@ -193,6 +192,37 @@ internal static class RankingHelper
 
         var remainingCandy = new Dictionary<int, int>(candyByPokemonNumber);
         var remainingDust = Math.Max(0, dustLimit);
+
+        var hasEvolutionCandyForCore = await HasEvolutionCandyAsync(
+            selected,
+            remainingCandy,
+            resolveCandyAsync,
+            cancellationToken,
+            spendCandy: false);
+
+        if (!hasEvolutionCandyForCore)
+        {
+            selected = await BuildEvolutionAffordableSelectionAsync(
+                allCandidates,
+                remainingCandy,
+                resolveCandyAsync,
+                cancellationToken);
+        }
+
+        if (selected.Count == 0)
+        {
+            return selected;
+        }
+
+        if (!await HasEvolutionCandyAsync(
+                selected,
+                remainingCandy,
+                resolveCandyAsync,
+                cancellationToken,
+                spendCandy: true))
+        {
+            return new List<RaidCandidate>();
+        }
 
         while (selected.Count > 0)
         {
@@ -258,6 +288,7 @@ internal static class RankingHelper
             .OrderByDescending(x => x.CurrentCp)
             .ThenBy(x => x.Rank)
             .ToList();
+        var selectedEvolutionNeedsByBucket = GetEvolutionCandyNeedsByBucket(selected);
 
         foreach (var replacement in replacements)
         {
@@ -285,9 +316,25 @@ internal static class RankingHelper
                 6);
 
             var replacementKey = GetOwnedUniqueKey(replacement);
-            if (rebalanced.Count == selected.Count && rebalanced.Any(x => GetOwnedUniqueKey(x) == replacementKey))
+            if (rebalanced.Count != selected.Count || !rebalanced.Any(x => GetOwnedUniqueKey(x) == replacementKey))
+            {
+                continue;
+            }
+
+            var rebalancedEvolutionNeedsByBucket = GetEvolutionCandyNeedsByBucket(rebalanced);
+            var evolutionSwapAllowed = await TrySwapEvolutionCandyReservationAsync(
+                selected,
+                rebalanced,
+                selectedEvolutionNeedsByBucket,
+                rebalancedEvolutionNeedsByBucket,
+                remainingCandy,
+                resolveCandyAsync,
+                cancellationToken);
+
+            if (evolutionSwapAllowed)
             {
                 selected = rebalanced.Select(CloneCandidate).ToList();
+                selectedEvolutionNeedsByBucket = rebalancedEvolutionNeedsByBucket;
             }
         }
 
@@ -295,6 +342,149 @@ internal static class RankingHelper
             .OrderByDescending(x => x.ProjectedCp)
             .ThenBy(x => x.Rank)
             .ToList();
+    }
+
+    private static async Task<IList<RaidCandidate>> BuildEvolutionAffordableSelectionAsync(
+        IList<RaidCandidate> allCandidates,
+        IDictionary<int, int> remainingCandy,
+        Func<int, string?, CancellationToken, Task<int>>? resolveCandyAsync,
+        CancellationToken cancellationToken)
+    {
+        var selected = new List<RaidCandidate>();
+
+        foreach (var candidate in allCandidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var trial = selected
+                .Append(CloneCandidate(candidate))
+                .ToList();
+
+            var reselected = SelectWithTeamConstraints(
+                trial.OrderBy(x => x.Rank)
+                     .ThenBy(x => x.Owned.PokemonNumber ?? int.MaxValue)
+                     .ThenByDescending(x => x.Owned.IvAvg ?? int.MinValue)
+                     .ThenByDescending(x => x.Owned.AtkIV ?? int.MinValue)
+                     .ThenByDescending(x => IsLucky(x.Owned))
+                     .ThenByDescending(x => x.Owned.CP ?? int.MinValue),
+                6);
+
+            var candidateKey = GetOwnedUniqueKey(candidate);
+            var containsCandidate = reselected.Any(x => GetOwnedUniqueKey(x) == candidateKey);
+            if (!containsCandidate)
+            {
+                continue;
+            }
+
+            var canReserveEvolutionCandy = await HasEvolutionCandyAsync(
+                reselected,
+                remainingCandy,
+                resolveCandyAsync,
+                cancellationToken,
+                spendCandy: false);
+
+            if (!canReserveEvolutionCandy)
+            {
+                continue;
+            }
+
+            selected = reselected.Select(CloneCandidate).ToList();
+            if (selected.Count >= 6)
+            {
+                break;
+            }
+        }
+
+        return selected;
+    }
+
+    private static Dictionary<int, int> GetEvolutionCandyNeedsByBucket(IEnumerable<RaidCandidate> selected)
+    {
+        var needsByBucket = new Dictionary<int, int>();
+
+        foreach (var candidate in selected)
+        {
+            if (candidate.RequiredEvolutionCandy <= 0)
+            {
+                continue;
+            }
+
+            var bucket = candidate.CandyBucketPokemonNumber;
+            needsByBucket[bucket] = needsByBucket.GetValueOrDefault(bucket) + candidate.RequiredEvolutionCandy;
+        }
+
+        return needsByBucket;
+    }
+
+    private static async Task<bool> HasEvolutionCandyAsync(
+        IList<RaidCandidate> selected,
+        IDictionary<int, int> remainingCandy,
+        Func<int, string?, CancellationToken, Task<int>>? resolveCandyAsync,
+        CancellationToken cancellationToken,
+        bool spendCandy)
+    {
+        var needsByBucket = GetEvolutionCandyNeedsByBucket(selected);
+
+        foreach (var (bucket, requiredCandy) in needsByBucket)
+        {
+            var name = selected.FirstOrDefault(x => x.CandyBucketPokemonNumber == bucket)?.CandyPromptName;
+            var available = await GetAvailableCandyAsync(bucket, name, remainingCandy, resolveCandyAsync, cancellationToken);
+            if (available < requiredCandy)
+            {
+                return false;
+            }
+        }
+
+        if (!spendCandy)
+        {
+            return true;
+        }
+
+        foreach (var (bucket, requiredCandy) in needsByBucket)
+        {
+            remainingCandy[bucket] -= requiredCandy;
+        }
+
+        return true;
+    }
+
+    private static async Task<bool> TrySwapEvolutionCandyReservationAsync(
+        IList<RaidCandidate> currentTeam,
+        IList<RaidCandidate> nextTeam,
+        IReadOnlyDictionary<int, int> currentNeedsByBucket,
+        IReadOnlyDictionary<int, int> nextNeedsByBucket,
+        IDictionary<int, int> remainingCandy,
+        Func<int, string?, CancellationToken, Task<int>>? resolveCandyAsync,
+        CancellationToken cancellationToken)
+    {
+        var allBuckets = currentNeedsByBucket.Keys
+            .Concat(nextNeedsByBucket.Keys)
+            .Distinct()
+            .ToList();
+
+        foreach (var bucket in allBuckets)
+        {
+            var name = nextTeam.FirstOrDefault(x => x.CandyBucketPokemonNumber == bucket)?.CandyPromptName
+                ?? currentTeam.FirstOrDefault(x => x.CandyBucketPokemonNumber == bucket)?.CandyPromptName;
+            var remaining = await GetAvailableCandyAsync(bucket, name, remainingCandy, resolveCandyAsync, cancellationToken);
+            var availableAfterRefund = remaining + currentNeedsByBucket.GetValueOrDefault(bucket);
+            var requiredNext = nextNeedsByBucket.GetValueOrDefault(bucket);
+
+            if (availableAfterRefund < requiredNext)
+            {
+                return false;
+            }
+        }
+
+        foreach (var bucket in allBuckets)
+        {
+            var currentNeed = currentNeedsByBucket.GetValueOrDefault(bucket);
+            var nextNeed = nextNeedsByBucket.GetValueOrDefault(bucket);
+            var remaining = remainingCandy.TryGetValue(bucket, out var existing) ? existing : 0;
+            remainingCandy[bucket] = remaining + currentNeed - nextNeed;
+        }
+
+        return true;
     }
 
     private static IList<RaidCandidate> SelectWithTeamConstraints(
@@ -307,7 +497,16 @@ internal static class RankingHelper
         var usedOwnedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var unevolvedCountsBySpecies = new Dictionary<int, int>();
         var familyCountsByRoot = new Dictionary<int, int>();
-        var usedMegaTargetsByFamily = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var selectedMegaKey = string.Empty;
+        var hasSelectedMega = false;
+
+        var bestMegaCandidate = candidates
+            .Select((candidate, index) => (candidate, index))
+            .Where(x => IsMegaOrPrimal(x.candidate.Matched))
+            .OrderBy(x => x.candidate.Rank)
+            .ThenBy(x => x.index)
+            .Select(x => x.candidate)
+            .FirstOrDefault();
 
         var effectiveFamilyCapByRoot = new Dictionary<int, int>();
         if (enforceFamilyMegaCap)
@@ -340,6 +539,27 @@ internal static class RankingHelper
 
             var isMegaOrPrimalTarget = IsMegaOrPrimal(candidate.Matched);
             var bypassUnevolvedCapForMega = enforceFamilyMegaCap && isMegaOrPrimalTarget;
+
+            if (isMegaOrPrimalTarget)
+            {
+                if (bestMegaCandidate is not null && !ReferenceEquals(candidate, bestMegaCandidate))
+                {
+                    if (!alreadyUsedOwned)
+                    {
+                        usedOwnedKeys.Remove(ownedKey);
+                    }
+                    continue;
+                }
+
+                if (hasSelectedMega)
+                {
+                    if (!alreadyUsedOwned)
+                    {
+                        usedOwnedKeys.Remove(ownedKey);
+                    }
+                    continue;
+                }
+            }
 
             if (!bypassUnevolvedCapForMega
                 && candidate.IsUnevolvedPlaceholder
@@ -377,7 +597,7 @@ internal static class RankingHelper
             if (isMegaOrPrimalTarget)
             {
                 var megaTargetKey = $"{candidate.FamilyKey}|{candidate.Matched.PokemonNumber}|{NormalizeForm(candidate.Matched.Form)}";
-                if (!usedMegaTargetsByFamily.Add(megaTargetKey))
+                if (hasSelectedMega && !string.Equals(selectedMegaKey, megaTargetKey, StringComparison.OrdinalIgnoreCase))
                 {
                     if (!alreadyUsedOwned)
                     {
@@ -385,6 +605,9 @@ internal static class RankingHelper
                     }
                     continue;
                 }
+
+                selectedMegaKey = megaTargetKey;
+                hasSelectedMega = true;
             }
 
             selected.Add(CloneCandidate(candidate));

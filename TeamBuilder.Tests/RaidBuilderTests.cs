@@ -44,63 +44,60 @@ public class RaidBuilderTests
     }
 
     [Fact]
-    public async Task UnlimitedResourcesFireTeam_UsesTwoCharmanderSlots_ForMegaXAndMegaY()
+    public async Task RaidTeams_UseAtMostOneMega_AndPreferHighestRankedMega()
     {
-        var csvPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "TeamBuilder.Tests", "Data", "test_pokemon.csv"));
-        await using var stream = File.OpenRead(csvPath);
-        var parseResult = await CsvParserService.ParsePokemonCsvAsync(stream);
-
-        Assert.True(string.IsNullOrWhiteSpace(parseResult.FatalError), parseResult.FatalError);
-        Assert.NotEmpty(parseResult.Pokemon);
-
-        var charmanders = parseResult.Pokemon
-            .Where(x => x.PokemonNumber == 4 && string.Equals(x.Form, "Normal", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        Assert.True(charmanders.Count >= 2, "test_pokemon.csv must contain at least two normal Charmander entries.");
-        Assert.All(charmanders, x => Assert.Equal("Normal", x.Form));
+        var ownedPokemon = new List<Pokemon>
+        {
+            new() { Index = 1, Name = "Charmander A", Form = "Normal", PokemonNumber = 4, CP = 826, HP = 82, AtkIV = 15, IvAvg = 98m, LevelMin = 20m },
+            new() { Index = 2, Name = "Charmander B", Form = "Normal", PokemonNumber = 4, CP = 532, HP = 65, AtkIV = 13, IvAvg = 90m, LevelMin = 15m },
+            new() { Index = 3, Name = "Charizard", Form = "Normal", PokemonNumber = 6, CP = 2400, HP = 150, AtkIV = 14, IvAvg = 93m, LevelMin = 30m }
+        };
 
         var rankingService = CreateRankingService();
-        var hubRanking = BuildHubRankingForFireScenario();
+        var hubRanking = BuildHubRankingForSingleMegaScenario();
 
         var response = await rankingService.BuildRankingResponseAsync(
-            parseResult.Pokemon,
+            ownedPokemon,
             hubRanking,
             dustLimit: 100000,
-            candyByPokemonNumber: new Dictionary<int, int>());
+            candyByPokemonNumber: new Dictionary<int, int>
+            {
+                [4] = 1000
+            });
 
         Assert.True(response.RaidTeamsByType.ContainsKey("fire"));
-        var fireUnlimited = response.RaidTeamsByType["fire"].UnlimitedResourcesTeam;
-        var snapshot = string.Join(" | ", fireUnlimited.Select(x => $"#{x.PokemonNumber}:{x.Name}->{x.EvolvedName}({x.EvolvedForm}) r{x.Index}"));
-
-        var familySlots = fireUnlimited.Count(x => x.PokemonNumber is 4 or 5 or 6);
-        Assert.True(familySlots == 2, $"Expected 2 charmander-family slots. Actual={familySlots}. Team={snapshot}");
-
-        var charmanderTargets = fireUnlimited
-            .Where(x => x.PokemonNumber == 4)
-            .Select(x => new
-            {
-                OwnedIdentity = $"{x.PokemonNumber}|{x.Form}|{x.CP}|{x.HP}",
-                OwnedCp = x.CP,
-                EvolvedName = x.EvolvedName ?? string.Empty,
-                MegaToken = NormalizeMegaFormToken(x.EvolvedForm)
-            })
-            .ToList();
-
-        Assert.True(charmanderTargets.Count == 2, $"Expected 2 Charmander entries. Actual={charmanderTargets.Count}. Team={snapshot}");
-        Assert.True(
-            charmanderTargets.Select(x => x.OwnedIdentity).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 2,
-            $"Expected 2 distinct owned Charmander entries, but the same one was reused. Team={snapshot}");
-        Assert.All(charmanderTargets, t => Assert.Equal("Charizard", t.EvolvedName));
-
-        var selectedCps = charmanderTargets.Select(x => x.OwnedCp).OrderBy(x => x).ToList();
-        Assert.Equal(new List<int?> { 532, 826 }, selectedCps);
-
-        var targetForms = charmanderTargets.Select(x => x.MegaToken).OrderBy(x => x).ToList();
-        Assert.All(targetForms, form => Assert.Contains(form, new[] { "x", "y" }));
-        if (targetForms.Count == 2)
+        var teams = new[]
         {
-            Assert.Equal(new List<string> { "x", "y" }, targetForms);
+            response.RaidTeamsByType["fire"].NoInvestmentTeam,
+            response.RaidTeamsByType["fire"].CurrentResourcesTeam,
+            response.RaidTeamsByType["fire"].UnlimitedResourcesTeam
+        };
+
+        foreach (var team in teams)
+        {
+            var megaMembers = team
+                .Where(x => ((x.EvolvedForm ?? string.Empty).IndexOf("mega", StringComparison.OrdinalIgnoreCase) >= 0)
+                    || ((x.EvolvedName ?? string.Empty).IndexOf("mega", StringComparison.OrdinalIgnoreCase) >= 0))
+                .ToList();
+
+            Assert.True(
+                megaMembers.Count <= 1,
+                $"Expected at most one mega in team. Team={string.Join(" | ", team.Select(x => $"#{x.PokemonNumber}:{x.Name}->{x.EvolvedName}({x.EvolvedForm}) r{x.Index}"))}");
         }
+
+        var currentMega = response.RaidTeamsByType["fire"].CurrentResourcesTeam
+            .FirstOrDefault(x => string.Equals(x.EvolvedForm, "Mega X", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(x.EvolvedForm, "Mega Y", StringComparison.OrdinalIgnoreCase));
+        var unlimitedMega = response.RaidTeamsByType["fire"].UnlimitedResourcesTeam
+            .FirstOrDefault(x => string.Equals(x.EvolvedForm, "Mega X", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(x.EvolvedForm, "Mega Y", StringComparison.OrdinalIgnoreCase));
+
+        Assert.True(currentMega is not null, "Expected Current Resources team to include a mega when one is available.");
+        Assert.True(unlimitedMega is not null, "Expected Unlimited Resources team to include a mega when one is available.");
+        Assert.Equal("Mega X", currentMega?.EvolvedForm);
+        Assert.Equal(1, currentMega?.Index);
+        Assert.Equal("Mega X", unlimitedMega?.EvolvedForm);
+        Assert.Equal(1, unlimitedMega?.Index);
     }
 
     [Fact]
@@ -166,6 +163,38 @@ public class RaidBuilderTests
             $"Expected exactly one Unlimited grass team member to target Roserade (#407). Actual={roseradeTargetCount}. Team={snapshot}");
     }
 
+    [Fact]
+    public async Task CurrentResourcesTeam_DoesNotTargetEvolution_WhenCandyIsInsufficient()
+    {
+        var ownedPokemon = new List<Pokemon>
+        {
+            new() { Index = 1, Name = "Charmander A", Form = "Normal", PokemonNumber = 4, CP = 826, HP = 82, AtkIV = 15, IvAvg = 98m, LevelMin = 20m },
+            new() { Index = 2, Name = "Charmander B", Form = "Normal", PokemonNumber = 4, CP = 532, HP = 65, AtkIV = 13, IvAvg = 90m, LevelMin = 15m },
+            new() { Index = 3, Name = "Charizard", Form = "Normal", PokemonNumber = 6, CP = 2400, HP = 150, AtkIV = 14, IvAvg = 93m, LevelMin = 30m }
+        };
+
+        var rankingService = CreateRankingService();
+        var hubRanking = BuildHubRankingForEvolutionCandyScenario();
+
+        var response = await rankingService.BuildRankingResponseAsync(
+            ownedPokemon,
+            hubRanking,
+            dustLimit: 0,
+            candyByPokemonNumber: new Dictionary<int, int>
+            {
+                [4] = 0
+            });
+
+        Assert.True(response.RaidTeamsByType.ContainsKey("fire"));
+        var current = response.RaidTeamsByType["fire"].CurrentResourcesTeam;
+
+        var charmanderMembers = current.Where(x => x.PokemonNumber == 4).ToList();
+        Assert.NotEmpty(charmanderMembers);
+        Assert.All(charmanderMembers, x => Assert.True(
+            x.EvolvedPokemonNumber is null,
+            $"Charmander should not be assigned to an evolved target without candy. Got target #{x.EvolvedPokemonNumber}."));
+    }
+
     private static RankingService CreateRankingService()
     {
         var handler = new FakePogoApiHandler();
@@ -215,6 +244,34 @@ public class RaidBuilderTests
         };
     }
 
+    private static HubRankingResponse BuildHubRankingForEvolutionCandyScenario()
+    {
+        return new HubRankingResponse
+        {
+            FireTierList =
+            [
+                new HubRankedPokemon { Rank = 1, Name = "Charizard", Form = "Normal", PokemonNumber = 6 },
+                new HubRankedPokemon { Rank = 2, Name = "Charmeleon", Form = "Normal", PokemonNumber = 5 },
+                new HubRankedPokemon { Rank = 3, Name = "Charmander", Form = "Normal", PokemonNumber = 4 }
+            ]
+        };
+    }
+
+    private static HubRankingResponse BuildHubRankingForSingleMegaScenario()
+    {
+        return new HubRankingResponse
+        {
+            FireTierList =
+            [
+                new HubRankedPokemon { Rank = 1, Name = "Charizard", Form = "Mega X", PokemonNumber = 6 },
+                new HubRankedPokemon { Rank = 2, Name = "Charizard", Form = "Mega Y", PokemonNumber = 6 },
+                new HubRankedPokemon { Rank = 3, Name = "Charizard", Form = "Normal", PokemonNumber = 6 },
+                new HubRankedPokemon { Rank = 4, Name = "Charmeleon", Form = "Normal", PokemonNumber = 5 },
+                new HubRankedPokemon { Rank = 5, Name = "Charmander", Form = "Normal", PokemonNumber = 4 }
+            ]
+        };
+    }
+
     private static IList<HubRankedPokemon> ReadHubCacheTierList(string fileName)
     {
         var path = Path.GetFullPath(Path.Combine(
@@ -231,22 +288,6 @@ public class RaidBuilderTests
         };
 
         return JsonSerializer.Deserialize<List<HubRankedPokemon>>(json, options) ?? [];
-    }
-
-    private static string NormalizeMegaFormToken(string? form)
-    {
-        var f = (form ?? string.Empty).Trim().ToLowerInvariant();
-        if (f is "x" or "mega x")
-        {
-            return "x";
-        }
-
-        if (f is "y" or "mega y")
-        {
-            return "y";
-        }
-
-        return f;
     }
 
     private sealed class FakePogoApiHandler : HttpMessageHandler
