@@ -1,0 +1,114 @@
+# Infrastructure release pipeline for PokemonGoTeamBuilder
+# - Creates/updates all Azure resources for the selected environment via az cli scripts.
+# - The resource group is created first; every other resource is deployed into it.
+#
+# Single parameter: environment. Everything else is hardcoded.
+# Prerequisites:
+#   1. An Azure Resource Manager service connection named 'pokemon_go-connection'
+#      must exist in the Azure DevOps project settings.
+#   2. A secret pipeline variable named 'sqlAdminPassword' must be defined on this
+#      pipeline (used only when the SQL server has to be created).
+parameters:
+- name: environment
+  displayName: 'Environment'
+  type: string
+  default: 'dev'
+  values:
+  - dev
+  - staging
+  - prod
+
+trigger: none
+pr: none
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  azureSubscription: 'pokemon_go-connection'
+  scriptFolder: '$(Build.SourcesDirectory)/infrastructure'
+
+stages:
+- stage: Infra_${{ parameters.environment }}
+  displayName: 'Infrastructure - ${{ parameters.environment }}'
+  jobs:
+  - deployment: DeployInfrastructure
+    displayName: 'Deploy Infrastructure'
+    environment: '${{ parameters.environment }}'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+
+          - task: AzureCLI@2
+            displayName: 'Resource Group'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'scriptPath'
+              scriptPath: '$(scriptFolder)/ResourceGroup.ps1'
+              arguments: '-Environment ${{ parameters.environment }}'
+              failOnStandardError: false
+
+          - task: AzureCLI@2
+            displayName: 'App Service (plan + web app)'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'scriptPath'
+              scriptPath: '$(scriptFolder)/AppService.ps1'
+              arguments: '-Environment ${{ parameters.environment }}'
+              failOnStandardError: false
+
+          - task: AzureCLI@2
+            displayName: 'Application Insights'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'scriptPath'
+              scriptPath: '$(scriptFolder)/AppInsights.ps1'
+              arguments: '-Environment ${{ parameters.environment }}'
+              failOnStandardError: false
+
+          - task: AzureCLI@2
+            displayName: 'App Configuration'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'scriptPath'
+              scriptPath: '$(scriptFolder)/AppConfiguration.ps1'
+              arguments: '-Environment ${{ parameters.environment }}'
+              failOnStandardError: false
+
+          - task: AzureCLI@2
+            displayName: 'Key Vault'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'scriptPath'
+              scriptPath: '$(scriptFolder)/KeyVault.ps1'
+              arguments: '-Environment ${{ parameters.environment }}'
+              failOnStandardError: false
+
+          - task: AzureCLI@2
+            displayName: 'SQL Database (server + database)'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'scriptPath'
+              scriptPath: '$(scriptFolder)/SqlDatabase.ps1'
+              arguments: '-Environment ${{ parameters.environment }}'
+              failOnStandardError: false
+            env:
+              SQL_ADMIN_PASSWORD: $(sqlAdminPassword)
+
+          - task: AzureCLI@2
+            displayName: 'Azure AI Foundry'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'scriptPath'
+              scriptPath: '$(scriptFolder)/AiFoundry.ps1'
+              arguments: '-Environment ${{ parameters.environment }}'
+              failOnStandardError: false

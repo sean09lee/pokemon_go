@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TeamBuilder.Data\TeamBuilder.Data.csproj" />
+    <ProjectReference Include="..\TeamBuilder.AI\TeamBuilder.AI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,9 +1,24 @@
 using TeamBuilder.Components;
 using TeamBuilder.Services.Helpers;
 using TeamBuilder.Services.Services;
+using TeamBuilder.AI;
+using TeamBuilder.AI.Configuration;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Configuration.AzureAppConfiguration;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var appConfigConnectionString = builder.Configuration.GetConnectionString("AppConfig");
+var appConfigLabel = builder.Configuration["AppConfiguration:Label"];
+
+if (!string.IsNullOrWhiteSpace(appConfigConnectionString))
+{
+    builder.Configuration.AddAzureAppConfiguration(options =>
+    {
+        options.Connect(appConfigConnectionString)
+            .Select(KeyFilter.Any, appConfigLabel);
+    });
+}
 
 // Add services to the container.
 builder.Services.AddHealthChecks();
@@ -18,6 +33,11 @@ builder.Services.AddHttpClient<PogoHelpers>(client =>
 {
     client.BaseAddress = new Uri("https://pogoapi.net/");
 });
+
+builder.Services.Configure<AIAdvisorOptions>(builder.Configuration.GetSection(AIAdvisorOptions.SectionName));
+builder.Services.AddSingleton<FoundryChatClient>();
+builder.Services.AddScoped<AIAdvisorService>();
+
 
 var app = builder.Build();
 

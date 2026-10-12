@@ -1,0 +1,57 @@
+# Release pipeline for PokemonGoTeamBuilder
+# - Downloads the zip artifact produced by build.pipeline.yaml
+# - Deploys to Azure App Service for the selected environment
+#
+# Single parameter: environment. Everything else is hardcoded.
+# Prerequisite: an Azure Resource Manager service connection named
+# 'pokemon_go-connection' must exist in the Azure DevOps project settings.
+parameters:
+- name: environment
+  displayName: 'Environment'
+  type: string
+  default: 'dev'
+  values:
+  - dev
+  - test
+  - prod
+
+trigger: none
+pr: none
+
+resources:
+  pipelines:
+  - pipeline: build
+    source: build.pipeline.yaml
+    trigger: true
+
+variables:
+  azureSubscription: 'pokemon_go-connection'
+  resourceGroup: 'pokemon_go'
+  artifactName: 'pokemon-go-team-builder'
+  ${{ if eq(parameters.environment, 'prod') }}:
+    webAppName: 'PokemonGoTeamBuilder'
+  ${{ else }}:
+    webAppName: 'PokemonGoTeamBuilder-${{ parameters.environment }}'
+
+stages:
+- stage: Deploy_${{ parameters.environment }}
+  displayName: 'Deploy to ${{ parameters.environment }}'
+  jobs:
+  - deployment: DeployWebApp
+    displayName: 'Deploy Web App'
+    environment: '${{ parameters.environment }}'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: build
+            artifact: '$(artifactName)'
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Azure App Service'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appType: 'webApp'
+              appName: '$(webAppName)'
+              resourceGroupName: '$(resourceGroup)'
+              package: '$(Pipeline.Workspace)/build/$(artifactName)/**/*.zip'
+              deploymentMethod: 'zipDeploy'

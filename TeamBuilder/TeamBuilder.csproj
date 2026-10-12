@@ -10,6 +10,11 @@
   <ItemGroup>
     <ProjectReference Include="..\TeamBuilder.Data\TeamBuilder.Data.csproj" />
     <ProjectReference Include="..\TeamBuilder.Services\TeamBuilder.Services.csproj" />
+    <ProjectReference Include="..\TeamBuilder.AI\TeamBuilder.AI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.AzureAppConfiguration" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
