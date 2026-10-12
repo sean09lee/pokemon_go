@@ -16,6 +16,29 @@ $appConfig = $names.AppConfig
 # Hardcoded desired state
 $desiredSku = 'Standard'
 
+function Ensure-ProviderRegistered {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Namespace
+    )
+
+    $state = (az provider show --namespace $Namespace --query registrationState -o tsv 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $state -eq 'Registered') {
+        Write-Host "Resource provider '$Namespace' is already registered."
+        return
+    }
+
+    Write-Host "Registering resource provider '$Namespace'..."
+    az provider register --namespace $Namespace --wait | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to register resource provider '$Namespace'."
+    }
+
+    Write-Host "Resource provider '$Namespace' is registered."
+}
+
+Ensure-ProviderRegistered -Namespace 'Microsoft.AppConfiguration'
+
 Write-Host "Checking App Configuration '$appConfig'..."
 $existing = Get-AzResourceOrNull "az appconfig show --name $appConfig --resource-group $rg"
 
