@@ -15,7 +15,7 @@ parameters:
   default: 'dev'
   values:
   - dev
-  - staging
+  - test
   - prod
 
 trigger: none

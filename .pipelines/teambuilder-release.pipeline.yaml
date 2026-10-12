@@ -29,9 +29,9 @@ variables:
   resourceGroup: 'teambuilder'
   artifactName: 'teambuilder'
   ${{ if eq(parameters.environment, 'prod') }}:
-    webAppName: 'PokemonGoTeamBuilder'
+    webAppName: 'TeamBuilder'
   ${{ else }}:
-    webAppName: 'PokemonGoTeamBuilder-${{ parameters.environment }}'
+    webAppName: 'TeamBuilder-${{ parameters.environment }}'
 
 stages:
 - stage: Deploy_${{ parameters.environment }}
