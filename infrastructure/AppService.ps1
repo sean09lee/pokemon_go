@@ -18,6 +18,7 @@ $webApp = $names.WebApp
 $desiredPlanSku = 'B1'
 $desiredFramework = 'v10.0'
 $desiredLinuxRuntime = 'DOTNETCORE|10.0'
+$desiredLinuxRuntimeArg = '"DOTNETCORE|10.0"'
 $desiredMinTls = '1.2'
 
 # --- App Service plan ---
@@ -74,7 +75,7 @@ if ($null -eq $existingApp) {
     $createFailed = $false
 
     if ($isLinuxPlan) {
-        az webapp create --name $webApp --resource-group $rg --plan $plan --runtime $desiredLinuxRuntime --https-only true --tags $script:TagArguments | Out-Null
+        az webapp create --name $webApp --resource-group $rg --plan $plan --runtime $desiredLinuxRuntimeArg --https-only true --tags $script:TagArguments | Out-Null
     }
     else {
         az webapp create --name $webApp --resource-group $rg --plan $plan --https-only true --tags $script:TagArguments | Out-Null
@@ -87,7 +88,7 @@ if ($null -eq $existingApp) {
     # Some API responses do not expose plan OS consistently; retry with Linux runtime when create fails.
     if ($createFailed -and -not $isLinuxPlan) {
         Write-Host "Initial create failed. Retrying with Linux runtime '$desiredLinuxRuntime'..."
-        az webapp create --name $webApp --resource-group $rg --plan $plan --runtime $desiredLinuxRuntime --https-only true --tags $script:TagArguments | Out-Null
+        az webapp create --name $webApp --resource-group $rg --plan $plan --runtime $desiredLinuxRuntimeArg --https-only true --tags $script:TagArguments | Out-Null
         if ($LASTEXITCODE -eq 0) {
             $isLinuxPlan = $true
             $createFailed = $false
@@ -97,7 +98,7 @@ if ($null -eq $existingApp) {
     if ($createFailed) { throw "Failed to create web app '$webApp'." }
 
     if ($isLinuxPlan) {
-        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntime --min-tls-version $desiredMinTls | Out-Null
+        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
     }
     else {
         az webapp config set --name $webApp --resource-group $rg --net-framework-version $desiredFramework --min-tls-version $desiredMinTls | Out-Null
@@ -137,7 +138,7 @@ if ($config.minTlsVersion -ne $desiredMinTls) {
 
 if ($needsConfigUpdate) {
     if ($isLinuxPlan) {
-        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntime --min-tls-version $desiredMinTls | Out-Null
+        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
     }
     else {
         az webapp config set --name $webApp --resource-group $rg --net-framework-version $desiredFramework --min-tls-version $desiredMinTls | Out-Null
