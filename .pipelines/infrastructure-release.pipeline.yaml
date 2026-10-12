@@ -25,7 +25,7 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-  azureSubscription: 'pokemon_go-connection'
+  azureSubscription: 'teambuilder-connection'
   scriptFolder: '$(Build.SourcesDirectory)/infrastructure'
 
 stages:

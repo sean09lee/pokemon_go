@@ -15,7 +15,7 @@ variables:
   solutionPath: 'TeamBuilder/TeamBuilder.slnx'
   webProjectPath: 'TeamBuilder/TeamBuilder.csproj'
   testProjectPath: 'TeamBuilder.Tests/TeamBuilder.Tests.csproj'
-  artifactName: 'pokemon-go-team-builder'
+  artifactName: 'teambuilder'
 
 steps:
 - task: UseDotNet@2

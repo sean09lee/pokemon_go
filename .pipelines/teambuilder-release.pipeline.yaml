@@ -27,7 +27,7 @@ resources:
 variables:
   azureSubscription: 'teambuilder-connection'
   resourceGroup: 'teambuilder'
-  artifactName: 'pokemon-go-team-builder'
+  artifactName: 'teambuilder'
   ${{ if eq(parameters.environment, 'prod') }}:
     webAppName: 'PokemonGoTeamBuilder'
   ${{ else }}:
