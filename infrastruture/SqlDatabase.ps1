@@ -4,7 +4,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('dev', 'staging', 'prod')]
+    [ValidateSet('dev', 'test', 'prod')]
     [string]$Environment,
 
     [string]$SqlAdminPassword = $env:SQL_ADMIN_PASSWORD

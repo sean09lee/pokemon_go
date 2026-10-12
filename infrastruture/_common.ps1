@@ -1,9 +1,9 @@
 # Shared hardcoded configuration and helpers for the infrastructure deployment scripts.
 # Dot-sourced by every Deploy-*.ps1 script.
 
-$script:Location = 'eastus'
+$script:Location = 'westus2'
 $script:DefaultTags = [ordered]@{
-    project    = 'pokemon-go-team-builder'
+    project    = 'team-builder'
     managed_by = 'infrastructure-release.pipeline.yaml'
 }
 $script:TagArguments = $script:DefaultTags.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }
@@ -21,16 +21,16 @@ function Get-InfraNames {
     [ordered]@{
         Environment   = $Environment
         Location      = $script:Location
-        ResourceGroup = "pokemon_go$suffix"
-        Plan          = "pokemongo-plan$suffix"
-        WebApp        = "PokemonGoTeamBuilder$suffix"
-        AppInsights   = "pokemongo-insights$suffix"
-        AppConfig     = "pokemongo-config$suffix"
-        KeyVault      = "pokemongo-kv$suffix"
-        SqlServer     = "pokemongo-sql$suffix"
+        ResourceGroup = "teambuilder-rg$suffix"
+        Plan          = "teambuilder-plan$suffix"
+        WebApp        = "teambuilder-web$suffix"
+        AppInsights   = "teambuilder-insights$suffix"
+        AppConfig     = "teambuilder-config$suffix"
+        KeyVault      = "teambuilder-kv$suffix"
+        SqlServer     = "teambuilder-sql$suffix"
         SqlDatabase   = 'teambuilder'
-        SqlAdminUser  = 'pokemongo-admin'
-        AiFoundry     = "pokemongo-ai$suffix"
+        SqlAdminUser  = 'teambuilder-admin'
+        AiFoundry     = "teambuilder-ai$suffix"
     }
 }
 

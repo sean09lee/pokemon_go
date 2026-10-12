@@ -4,7 +4,7 @@
 #
 # Single parameter: environment. Everything else is hardcoded.
 # Prerequisite: an Azure Resource Manager service connection named
-# 'pokemon_go-connection' must exist in the Azure DevOps project settings.
+# 'teambuilder-connection' must exist in the Azure DevOps project settings.
 parameters:
 - name: environment
   displayName: 'Environment'
@@ -25,8 +25,8 @@ resources:
     trigger: true
 
 variables:
-  azureSubscription: 'pokemon_go-connection'
-  resourceGroup: 'pokemon_go'
+  azureSubscription: 'teambuilder-connection'
+  resourceGroup: 'teambuilder'
   artifactName: 'pokemon-go-team-builder'
   ${{ if eq(parameters.environment, 'prod') }}:
     webAppName: 'PokemonGoTeamBuilder'
