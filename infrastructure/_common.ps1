@@ -12,7 +12,7 @@ $script:TagArguments = $script:DefaultTags.GetEnumerator() | ForEach-Object { "$
 function Get-InfraNames {
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('dev', 'staging', 'prod')]
+        [ValidateSet('dev', 'test', 'prod')]
         [string]$Environment
     )
 
