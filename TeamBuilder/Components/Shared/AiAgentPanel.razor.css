@@ -1,0 +1,78 @@
+.tb-ai-panel {
+    background: #202a33;
+    border: 1px solid #344252;
+    border-radius: 12px;
+    padding: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.tb-ai-header {
+    margin-bottom: 0.6rem;
+}
+
+.tb-ai-title {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #ffffff;
+}
+
+.tb-ai-subtitle {
+    margin: 0.2rem 0 0;
+    font-size: 0.82rem;
+    color: #9eb2c8;
+}
+
+.tb-ai-history {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+    padding-right: 0.25rem;
+}
+
+.tb-ai-message {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    border-radius: 8px;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.88rem;
+}
+
+.tb-ai-message-sender {
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: #9eb2c8;
+}
+
+.tb-ai-message-user {
+    background: #2b3847;
+    align-self: flex-end;
+    max-width: 90%;
+}
+
+.tb-ai-message-agent {
+    background: #27323e;
+    align-self: flex-start;
+    max-width: 90%;
+}
+
+.tb-ai-alert {
+    font-size: 0.85rem;
+    padding: 0.5rem 0.65rem;
+    margin-bottom: 0.6rem;
+}
+
+.tb-ai-input-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.tb-ai-input-row .form-control {
+    flex: 1;
+}

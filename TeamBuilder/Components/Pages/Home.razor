@@ -7,6 +7,7 @@
 @inject CsvParserService CsvParserService
 @inject IHubApiService HubApiService
 @inject IRankingService RankingService
+@using TeamBuilder.Components.Shared
 
 <PageTitle>Home</PageTitle>
 
@@ -355,6 +356,10 @@
 			</div>
 		}
 	</section>
+
+	<aside class="tb-ai-sidebar">
+		<AiAgentPanel />
+	</aside>
 </div>
 
 @code {

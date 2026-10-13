@@ -31,8 +31,9 @@ main {
 .top-nav {
     display: flex;
     align-items: stretch;
+    justify-content: center;
     gap: 0;
-    justify-self: start;
+    justify-self: center;
     height: 100%;
 }
 
