@@ -1,8 +1,9 @@
 ﻿using System.Text.Json;
+using TeamBuilder.Services.Contracts;
 
 namespace TeamBuilder.Services.Services;
 
-public class CacheService
+public class CacheService : ICacheService
 {
 	private static readonly JsonSerializerOptions JsonOptions = new()
 	{
@@ -18,7 +19,7 @@ public class CacheService
 		Directory.CreateDirectory(_cacheDirectoryPath);
 	}
 
-	internal async Task<T?> TryGetAsync<T>(string cacheKey, CancellationToken cancellationToken = default)
+	public async Task<T?> TryGetAsync<T>(string cacheKey, CancellationToken cancellationToken = default)
 	{
 		try
 		{
@@ -37,7 +38,7 @@ public class CacheService
 		}
 	}
 
-	internal async Task SaveAsync<T>(string cacheKey, T data, CancellationToken cancellationToken = default)
+	public async Task SaveAsync<T>(string cacheKey, T data, CancellationToken cancellationToken = default)
 	{
 		var path = GetCacheFilePath(cacheKey);
 		await using var stream = File.Create(path);

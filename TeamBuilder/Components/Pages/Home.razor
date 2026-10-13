@@ -1,11 +1,12 @@
 ﻿@page "/"
 @using Microsoft.AspNetCore.Components.Forms
 @using TeamBuilder.Services.Services
+@using TeamBuilder.Services.Contracts
 @using TeamBuilder.Data.Models
 @using TeamBuilder.Data.Responses
 @inject CsvParserService CsvParserService
-@inject HubApiService HubApiService
-@inject RankingService RankingService
+@inject IHubApiService HubApiService
+@inject IRankingService RankingService
 
 <PageTitle>Home</PageTitle>
 

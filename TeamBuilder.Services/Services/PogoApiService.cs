@@ -1,6 +1,7 @@
 using System.Globalization;
 using TeamBuilder.Data.Models;
 using TeamBuilder.Data.Responses;
+using TeamBuilder.Services.Contracts;
 using TeamBuilder.Services.Helpers;
 
 namespace TeamBuilder.Services.Services;
@@ -9,7 +10,7 @@ namespace TeamBuilder.Services.Services;
 /// Service for consuming all documented PoGoAPI endpoints.
 /// Base address should be configured as https://pogoapi.net/
 /// </summary>
-public class PogoApiService(PogoHelpers pogoHelpers)
+public class PogoApiService(PogoHelpers pogoHelpers) : IPogoApiService
 {
   private readonly PogoHelpers _helper = pogoHelpers;
 

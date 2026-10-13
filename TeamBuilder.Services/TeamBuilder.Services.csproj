@@ -8,10 +8,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TeamBuilder.Data\TeamBuilder.Data.csproj" />
+    <ProjectReference Include="..\TeamBuilder.AI\TeamBuilder.AI.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Playwright" Version="1.54.0" />
+    <PackageReference Include="Microsoft.Playwright" Version="1.63.0" />
   </ItemGroup>
 
 </Project>

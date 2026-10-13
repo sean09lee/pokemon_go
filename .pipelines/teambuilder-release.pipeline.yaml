@@ -1,0 +1,68 @@
+# Release pipeline for PokemonGoTeamBuilder
+# - Downloads the zip artifact produced by build.pipeline.yaml
+# - Deploys to Azure App Service for the selected environment
+#
+# Single parameter: environment. Resource names are resolved at runtime from
+# infrastructure/_common.ps1 (Get-InfraNames) so they always match what the
+# infrastructure pipeline created, including the unique suffix.
+# Prerequisite: an Azure Resource Manager service connection named
+# 'teambuilder-connection' must exist in the Azure DevOps project settings.
+parameters:
+- name: environment
+  displayName: 'Environment'
+  type: string
+  default: 'dev'
+  values:
+  - dev
+  - test
+  - prod
+
+trigger: none
+pr: none
+
+resources:
+  pipelines:
+  - pipeline: build
+    source: build.pipeline.yaml
+    trigger: true
+
+# resourceGroup and webAppName are set at runtime by the 'Resolve resource names'
+# step below, sourced from infrastructure/_common.ps1.
+variables:
+  azureSubscription: 'teambuilder_connection'
+  artifactName: 'teambuilder'
+
+stages:
+- stage: Deploy_${{ parameters.environment }}
+  displayName: 'Deploy to ${{ parameters.environment }}'
+  jobs:
+  - deployment: DeployWebApp
+    displayName: 'Deploy Web App'
+    environment: '${{ parameters.environment }}'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+          - download: build
+            artifact: '$(artifactName)'
+          - task: AzureCLI@2
+            displayName: 'Resolve resource names'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                . "$(Build.SourcesDirectory)/infrastructure/_common.ps1"
+                $names = Get-InfraNames -Environment '${{ parameters.environment }}'
+                Write-Host "##vso[task.setvariable variable=resourceGroup]$($names.ResourceGroup)"
+                Write-Host "##vso[task.setvariable variable=webAppName]$($names.WebApp)"
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Azure App Service'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appType: 'webApp'
+              appName: '$(webAppName)'
+              resourceGroupName: '$(resourceGroup)'
+              package: '$(Pipeline.Workspace)/build/$(artifactName)/**/*.zip'
+              deploymentMethod: 'zipDeploy'

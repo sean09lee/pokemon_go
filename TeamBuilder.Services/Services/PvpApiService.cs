@@ -1,6 +1,8 @@
-﻿namespace TeamBuilder.Services.Services;
+﻿using TeamBuilder.Services.Contracts;
 
-public class PvpApiService
+namespace TeamBuilder.Services.Services;
+
+public class PvpApiService : IPvpApiService
 {
     public Task<string> GetPvpData()
     {

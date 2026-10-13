@@ -1,0 +1,70 @@
+# CI build pipeline for PokemonGoTeamBuilder
+# - Restores, builds, tests, and publishes the Blazor web app
+# - Produces a single zip artifact consumed by release.pipeline.yaml
+trigger:
+  branches:
+    include:
+      - develop
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  dotNetVersion: '10.0.x'
+  solutionPath: 'TeamBuilder/TeamBuilder.slnx'
+  webProjectPath: 'TeamBuilder/TeamBuilder.csproj'
+  testProjectPath: 'TeamBuilder.Tests/TeamBuilder.Tests.csproj'
+  artifactName: 'teambuilder'
+
+steps:
+- task: UseDotNet@2
+  displayName: 'Install .NET SDK'
+  inputs:
+    packageType: 'sdk'
+    version: '$(dotNetVersion)'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Restore'
+  inputs:
+    command: 'restore'
+    projects: '$(solutionPath)'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build'
+  inputs:
+    command: 'build'
+    projects: '$(solutionPath)'
+    arguments: '--configuration $(buildConfiguration) --no-restore'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Test'
+  inputs:
+    command: 'test'
+    projects: '$(testProjectPath)'
+    arguments: '--configuration $(buildConfiguration) --no-build --logger trx --results-directory $(Agent.TempDirectory)/TestResults'
+
+- task: PublishTestResults@2
+  displayName: 'Publish Test Results'
+  condition: succeededOrFailed()
+  inputs:
+    testResultsFormat: 'VSTest'
+    testResultsFiles: '**/*.trx'
+    searchFolder: '$(Agent.TempDirectory)/TestResults'
+    mergeTestResults: true
+    failTaskOnFailedTests: true
+
+- task: DotNetCoreCLI@2
+  displayName: 'Publish Web App'
+  inputs:
+    command: 'publish'
+    publishWebProjects: false
+    projects: '$(webProjectPath)'
+    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/app'
+    zipAfterPublish: true
+
+- task: PublishPipelineArtifact@1
+  displayName: 'Publish Artifact'
+  inputs:
+    targetPath: '$(Build.ArtifactStagingDirectory)/app'
+    artifactName: '$(artifactName)'
