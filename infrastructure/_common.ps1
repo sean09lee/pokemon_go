@@ -29,7 +29,7 @@ function Get-InfraNames {
         KeyVault      = "teambuilder-kv$suffix"
         SqlServer     = "teambuilder-sql$suffix"
         SqlDatabase   = 'teambuilder'
-        SqlAdminUser  = 'teambuilder-admin'
+        SqlAdminUser  = 'teambuilderadmin'
         AiFoundry     = "teambuilder-ai$suffix"
     }
 }

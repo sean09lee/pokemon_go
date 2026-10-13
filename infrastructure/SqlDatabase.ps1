@@ -19,6 +19,11 @@ $server = $names.SqlServer
 $database = $names.SqlDatabase
 $adminUser = $names.SqlAdminUser
 
+# SQL admin login naming rules are stricter than many Azure resource names.
+if ($adminUser -notmatch '^[A-Za-z][A-Za-z0-9_@#$]{0,127}$') {
+    throw "SQL admin user '$adminUser' is invalid. Use 1-128 chars, start with a letter, and only include letters, numbers, or _ @ # $."
+}
+
 # Hardcoded desired state
 $desiredMinTls = '1.2'
 $desiredEdition = 'Basic'
@@ -57,8 +62,16 @@ if ($null -eq $existingServer) {
         throw "SQL server '$server' does not exist and no admin password was provided. Map the 'sqlAdminPassword' secret variable to the SQL_ADMIN_PASSWORD environment variable."
     }
     Write-Host "SQL server '$server' does not exist. Creating..."
-    az sql server create --name $server --resource-group $rg --location $names.Location --admin-user $adminUser --admin-password $SqlAdminPassword --minimal-tls-version $desiredMinTls --enable-public-network true | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Failed to create SQL server '$server'." }
+    $createServerOutput = az sql server create --name $server --resource-group $rg --location $names.Location --admin-user $adminUser --admin-password $SqlAdminPassword --minimal-tls-version $desiredMinTls --enable-public-network true 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $errorDetail = ($createServerOutput | Out-String).Trim()
+        if ([string]::IsNullOrWhiteSpace($errorDetail)) {
+            throw "Failed to create SQL server '$server'."
+        }
+
+        throw "Failed to create SQL server '$server'. Azure CLI output: $errorDetail"
+    }
+
     Write-Host "Created SQL server '$server'."
 }
 else {
