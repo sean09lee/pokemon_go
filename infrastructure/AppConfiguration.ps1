@@ -47,17 +47,23 @@ if ($null -eq $existing) {
     az appconfig create --name $appConfig --resource-group $rg --location $names.Location --sku $desiredSku --tags $script:TagArguments | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to create App Configuration '$appConfig'." }
     Write-Host "Created App Configuration '$appConfig'."
-    return
-}
-
-Write-Host "App Configuration '$appConfig' exists. Comparing properties..."
-
-if ($existing.sku.name -ne $desiredSku) {
-    Write-Host "SKU drift detected ('$($existing.sku.name)' vs '$desiredSku'). Updating..."
-    az appconfig update --name $appConfig --resource-group $rg --sku $desiredSku | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Failed to update App Configuration '$appConfig'." }
-    Write-Host "Updated App Configuration '$appConfig' SKU."
 }
 else {
-    Write-Host "No drift detected on App Configuration '$appConfig'."
+    Write-Host "App Configuration '$appConfig' exists. Comparing properties..."
+
+    if ($existing.sku.name -ne $desiredSku) {
+        Write-Host "SKU drift detected ('$($existing.sku.name)' vs '$desiredSku'). Updating..."
+        az appconfig update --name $appConfig --resource-group $rg --sku $desiredSku | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to update App Configuration '$appConfig'." }
+        Write-Host "Updated App Configuration '$appConfig' SKU."
+    }
+    else {
+        Write-Host "No drift detected on App Configuration '$appConfig'."
+    }
 }
+
+# --- RBAC: grant the admin group add/update/delete access to key-values ---
+$appConfigScope = (az appconfig show --name $appConfig --resource-group $rg --query id -o tsv)
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($appConfigScope)) { throw "Failed to resolve the resource id for App Configuration '$appConfig'." }
+
+Ensure-RoleAssignment -Scope $appConfigScope -RoleName 'App Configuration Data Owner'
