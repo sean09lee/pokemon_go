@@ -57,6 +57,46 @@ stages:
                 $names = Get-InfraNames -Environment '${{ parameters.environment }}'
                 Write-Host "##vso[task.setvariable variable=resourceGroup]$($names.ResourceGroup)"
                 Write-Host "##vso[task.setvariable variable=webAppName]$($names.WebApp)"
+                Write-Host "##vso[task.setvariable variable=appConfigName]$($names.AppConfig)"
+          - task: AzureCLI@2
+            displayName: 'Update appsettings.json with App Configuration connection string and label'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                $ErrorActionPreference = 'Stop'
+
+                $connectionString = (az appconfig credential list --name $(appConfigName) --resource-group $(resourceGroup) --query "[?name=='Primary'].connectionString" -o tsv)
+                if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($connectionString)) {
+                    throw "Failed to resolve the primary connection string for App Configuration '$(appConfigName)'."
+                }
+
+                $label = '${{ parameters.environment }}'.ToLowerInvariant()
+
+                $zipPath = Get-ChildItem -Path '$(Pipeline.Workspace)/build/$(artifactName)' -Filter '*.zip' -Recurse | Select-Object -First 1 -ExpandProperty FullName
+                if ([string]::IsNullOrWhiteSpace($zipPath)) {
+                    throw "Could not locate the published zip artifact under '$(Pipeline.Workspace)/build/$(artifactName)'."
+                }
+
+                $extractPath = Join-Path '$(Agent.TempDirectory)' 'app-package'
+                if (Test-Path $extractPath) {
+                    Remove-Item $extractPath -Recurse -Force
+                }
+                Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+                $appSettingsPath = Join-Path $extractPath 'appsettings.json'
+                if (-not (Test-Path $appSettingsPath)) {
+                    throw "appsettings.json was not found in the published package at '$appSettingsPath'."
+                }
+
+                $appSettings = Get-Content $appSettingsPath -Raw | ConvertFrom-Json
+                $appSettings.ConnectionStrings.AppConfiguration = $connectionString
+                $appSettings.ConnectionStrings.Label = $label
+                $appSettings | ConvertTo-Json -Depth 10 | Set-Content $appSettingsPath -Encoding utf8
+
+                Remove-Item $zipPath -Force
+                Compress-Archive -Path (Join-Path $extractPath '*') -DestinationPath $zipPath -Force
           - task: AzureWebApp@1
             displayName: 'Deploy to Azure App Service'
             inputs:
