@@ -16,10 +16,13 @@ $script:TagArguments = $script:DefaultTags.GetEnumerator() | ForEach-Object { "$
 # If a collision ever occurs, bump $script:UniqueSalt to re-roll every suffix.
 $script:UniqueSalt = 'v1'
 
-# Display name (or object id) of the Microsoft Entra group that receives data-plane
-# admin access (add/update/delete) to Key Vault secrets and App Configuration
-# key-values in every environment.
-$script:AdminGroupName = 'teambuilder-admins'
+# The Microsoft Entra group that receives data-plane admin access (add/update/delete)
+# to Key Vault secrets and App Configuration key-values in every environment.
+# The group's OBJECT ID (GUID) is supplied via the ADMIN_GROUP_OBJECT_ID environment
+# variable, mapped from the 'adminGroupObjectId' secret variable on the pipeline so the
+# identifier stays out of the repo. The object id is used directly - resolving a
+# display name would require Microsoft Graph permissions the service connection lacks.
+$script:AdminGroupName = 'teambuilder-admins'  # used only for log messages
 
 function Get-UniqueSuffix {
     if (-not $script:UniqueSuffix) {
@@ -78,25 +81,25 @@ function Get-AzResourceOrNull {
     return ($output | ConvertFrom-Json)
 }
 
-# Resolves (and caches) the object id of the admin group defined above.
+# Returns the object id of the admin group, read from the ADMIN_GROUP_OBJECT_ID
+# environment variable. Fails with guidance when it is missing or unresolved.
 function Get-AdminGroupObjectId {
-    if (-not $script:AdminGroupObjectId) {
-        Write-Host "Resolving admin group '$($script:AdminGroupName)'..."
-        $script:AdminGroupObjectId = (az ad group show --group $script:AdminGroupName --query id -o tsv 2>$null)
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($script:AdminGroupObjectId)) {
-            $mailNickname = $script:AdminGroupName -replace '[^a-zA-Z0-9]', ''
-            Write-Warning "Admin group '$($script:AdminGroupName)' does not exist in Microsoft Entra ID."
-            Write-Warning "The pipeline does not create it (that requires Graph permissions the service connection does not have)."
-            Write-Warning "Create it once, add yourself, then re-run this pipeline:"
-            Write-Warning "  az ad group create --display-name $($script:AdminGroupName) --mail-nickname $mailNickname"
-            Write-Warning "  az ad group member add --group $($script:AdminGroupName) --member-id (az ad signed-in-user show --query id -o tsv)"
-            throw "Admin group '$($script:AdminGroupName)' was not found. Create it as described above and re-run."
-        }
-
-        Write-Host "Resolved admin group '$($script:AdminGroupName)' ($($script:AdminGroupObjectId))."
+    $objectId = $env:ADMIN_GROUP_OBJECT_ID
+    if ([string]::IsNullOrWhiteSpace($objectId) -or
+        $objectId -match '^\$\([^)]+\)$' -or
+        $objectId -notmatch '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$') {
+        Write-Warning "ADMIN_GROUP_OBJECT_ID is missing or unresolved ('$objectId')."
+        Write-Warning "1. Find the object id of the '$($script:AdminGroupName)' group in the portal"
+        Write-Warning "   (Entra ID -> Groups -> $($script:AdminGroupName) -> Overview) or run:"
+        Write-Warning "     az ad group show --group $($script:AdminGroupName) --query id -o tsv"
+        Write-Warning "2. Define a SECRET pipeline variable named 'adminGroupObjectId' on the"
+        Write-Warning "   infrastructure-release pipeline with that GUID as the value. It is mapped"
+        Write-Warning "   to ADMIN_GROUP_OBJECT_ID in the Key Vault and App Configuration tasks."
+        Write-Warning "   For local runs, set `$env:ADMIN_GROUP_OBJECT_ID before invoking the script."
+        throw "Admin group object id is not configured. Define the 'adminGroupObjectId' secret pipeline variable and re-run."
     }
 
-    return $script:AdminGroupObjectId
+    return $objectId
 }
 
 # Grants the admin group the given role at the given resource scope.

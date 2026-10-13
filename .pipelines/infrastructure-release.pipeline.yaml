@@ -8,6 +8,9 @@
 #      must exist in the Azure DevOps project settings.
 #   2. A secret pipeline variable named 'sqlAdminPassword' must be defined on this
 #      pipeline (used only when the SQL server has to be created).
+#   3. A secret pipeline variable named 'adminGroupObjectId' must be defined on this
+#      pipeline (object id of the Entra group that gets data-plane admin access to
+#      Key Vault and App Configuration).
 parameters:
 - name: environment
   displayName: 'Environment'
@@ -80,6 +83,8 @@ stages:
               scriptPath: '$(scriptFolder)/AppConfiguration.ps1'
               arguments: '-Environment ${{ parameters.environment }}'
               failOnStandardError: false
+            env:
+              ADMIN_GROUP_OBJECT_ID: $(adminGroupObjectId)
 
           - task: AzureCLI@2
             displayName: 'Key Vault'
@@ -90,6 +95,8 @@ stages:
               scriptPath: '$(scriptFolder)/KeyVault.ps1'
               arguments: '-Environment ${{ parameters.environment }}'
               failOnStandardError: false
+            env:
+              ADMIN_GROUP_OBJECT_ID: $(adminGroupObjectId)
 
           - task: AzureCLI@2
             displayName: 'SQL Database (server + database)'
