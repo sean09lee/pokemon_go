@@ -15,7 +15,7 @@ $plan = $names.Plan
 $webApp = $names.WebApp
 
 # Hardcoded desired state
-$desiredPlanSku = 'F1'
+$desiredPlanSku = 'D1'
 $desiredFramework = 'v10.0'
 $desiredLinuxRuntime = 'DOTNETCORE|10.0'
 $desiredLinuxRuntimeArg = '"DOTNETCORE|10.0"'
@@ -27,8 +27,16 @@ $existingPlan = Get-AzResourceOrNull "az appservice plan show --name $plan --res
 
 if ($null -eq $existingPlan) {
     Write-Host "App Service plan '$plan' does not exist. Creating..."
-    az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --tags $script:TagArguments | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Failed to create App Service plan '$plan'." }
+    # Capacity and provisioning errors can be transient; retry with backoff.
+    $maxAttempts = 5
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --tags $script:TagArguments | Out-Null
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($attempt -eq $maxAttempts) { throw "Failed to create App Service plan '$plan' after $maxAttempts attempts." }
+        $delay = 30 * $attempt
+        Write-Host "Plan creation failed (attempt $attempt/$maxAttempts). Retrying in $delay seconds..."
+        Start-Sleep -Seconds $delay
+    }
     Write-Host "Created App Service plan '$plan'."
 
     # Re-read the plan so runtime logic below can rely on plan OS information.
@@ -36,6 +44,13 @@ if ($null -eq $existingPlan) {
 }
 else {
     Write-Host "App Service plan '$plan' exists. Comparing properties..."
+    if ($desiredPlanSku -eq 'D1' -and (
+        $existingPlan.reserved -eq $true -or
+        ($null -ne $existingPlan.kind -and ($existingPlan.kind -as [string]).ToLowerInvariant().Contains('linux'))
+    )) {
+        throw "The Shared (D1) App Service tier requires a Windows plan. Existing plan '$plan' is Linux and cannot be converted in place."
+    }
+
     if ($existingPlan.sku.name -ne $desiredPlanSku) {
         Write-Host "SKU drift detected ('$($existingPlan.sku.name)' vs '$desiredPlanSku'). Updating..."
         az appservice plan update --name $plan --resource-group $rg --sku $desiredPlanSku | Out-Null
