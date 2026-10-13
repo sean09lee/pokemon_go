@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/.pipelines/">
+    <File Path="../.pipelines/infrastructure-release.pipeline.yaml" />
+    <File Path="../.pipelines/teambuilder-build.pipeline.yaml" />
+    <File Path="../.pipelines/teambuilder-release.pipeline.yaml" />
+  </Folder>
   <Project Path="../TeamBuilder.AI/TeamBuilder.AI.csproj" />
   <Project Path="../TeamBuilder.Data/TeamBuilder.Data.csproj" />
   <Project Path="../TeamBuilder.Services/TeamBuilder.Services.csproj" />
