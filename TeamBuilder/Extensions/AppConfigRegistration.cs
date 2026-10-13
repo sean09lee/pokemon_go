@@ -12,25 +12,26 @@ public static class AppConfigRegistration
         var configLabel = configuration[ServiceConstants.Label];
         var label = string.IsNullOrWhiteSpace(configLabel) ?
             ServiceConstants.Local.ToLower() :
-            configLabel.ToLower() ;
+            configLabel!.ToLower();
+        var exclude = label.Equals(ServiceConstants.Local, StringComparison.CurrentCultureIgnoreCase);
 
-        if (!string.IsNullOrWhiteSpace(connectionString))
+        configuration.AddAzureAppConfiguration(options =>
         {
-            configuration.AddAzureAppConfiguration(options =>
-            {
-                options.Connect(connectionString)
-                    .Select(KeyFilter.Any, LabelFilter.Null)
-                    .Select(KeyFilter.Any, label)
-                    .ConfigureKeyVault(kv =>
+            options.Connect(connectionString)
+                .Select(KeyFilter.Any, LabelFilter.Null)
+                .Select(KeyFilter.Any, label)
+                .ConfigureKeyVault(kv =>
+                {
+                    kv.SetCredential(new DefaultAzureCredential(new DefaultAzureCredentialOptions
                     {
-                        kv.SetCredential(new DefaultAzureCredential());
-                    })
-                    .ConfigureRefresh(refresh =>
-                    {
-                        refresh.Register(ServiceConstants.Refresh, refreshAll: true);
-                        refresh.SetRefreshInterval(TimeSpan.FromMinutes(5));
-                    });
-            });
-        }
+                        ExcludeManagedIdentityCredential = exclude,
+                    }));
+                })
+                .ConfigureRefresh(refresh =>
+                {
+                    refresh.Register(ServiceConstants.Refresh, refreshAll: true);
+                    refresh.SetRefreshInterval(TimeSpan.FromMinutes(5));
+                });
+        });
     }
 }
