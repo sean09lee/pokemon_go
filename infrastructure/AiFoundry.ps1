@@ -68,20 +68,23 @@ else {
 }
 
 # --- Model deployment ---
-# gpt-4o-mini is the cheapest chat tier. GlobalStandard bills per token, so the
-# capacity (units of 1k TPM) only sets the throughput limit, never the price.
-$desiredDeployment = 'gpt-4o-mini'
-$desiredModelName = 'gpt-4o-mini'
-$desiredModelVersion = '2024-07-18'
+# Ministral-3B is the smallest/cheapest chat model available to this subscription
+# (verified via 'az cognitiveservices account list-models' - the subscription has
+# no OpenAI-format models enabled). GlobalStandard bills per token, so the
+# capacity only sets the throughput limit, never the price.
+$desiredDeployment = 'Ministral-3B'
+$desiredModelName = 'Ministral-3B'
+$desiredModelVersion = '1'
+$desiredModelFormat = 'Mistral AI'
 $desiredDeploymentSku = 'GlobalStandard'
-$desiredCapacity = 10
+$desiredCapacity = 1
 
 Write-Host "Checking model deployment '$desiredDeployment' on '$aiFoundry'..."
 $existingDeployment = Get-AzResourceOrNull "az cognitiveservices account deployment show --name $aiFoundry --resource-group $rg --deployment-name $desiredDeployment"
 
 if ($null -eq $existingDeployment) {
     Write-Host "Model deployment '$desiredDeployment' does not exist. Creating..."
-    az cognitiveservices account deployment create --name $aiFoundry --resource-group $rg --deployment-name $desiredDeployment --model-name $desiredModelName --model-version $desiredModelVersion --model-format OpenAI --sku-name $desiredDeploymentSku --sku-capacity $desiredCapacity | Out-Null
+    az cognitiveservices account deployment create --name $aiFoundry --resource-group $rg --deployment-name $desiredDeployment --model-name $desiredModelName --model-version $desiredModelVersion --model-format $desiredModelFormat --sku-name $desiredDeploymentSku --sku-capacity $desiredCapacity | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to create model deployment '$desiredDeployment'." }
     Write-Host "Created model deployment '$desiredDeployment'."
 }
@@ -89,7 +92,7 @@ elseif ($existingDeployment.properties.model.name -ne $desiredModelName -or
         $existingDeployment.properties.model.version -ne $desiredModelVersion -or
         $existingDeployment.sku.name -ne $desiredDeploymentSku) {
     Write-Host "Drift detected on model deployment '$desiredDeployment'. Updating..."
-    az cognitiveservices account deployment create --name $aiFoundry --resource-group $rg --deployment-name $desiredDeployment --model-name $desiredModelName --model-version $desiredModelVersion --model-format OpenAI --sku-name $desiredDeploymentSku --sku-capacity $desiredCapacity | Out-Null
+    az cognitiveservices account deployment create --name $aiFoundry --resource-group $rg --deployment-name $desiredDeployment --model-name $desiredModelName --model-version $desiredModelVersion --model-format $desiredModelFormat --sku-name $desiredDeploymentSku --sku-capacity $desiredCapacity | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to update model deployment '$desiredDeployment'." }
     Write-Host "Updated model deployment '$desiredDeployment'."
 }
