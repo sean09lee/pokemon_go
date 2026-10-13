@@ -6,10 +6,13 @@ namespace TeamBuilder.Extensions;
 
 public static class AppConfigRegistration
 {
-    public static void AddAppConfiguration(this IServiceCollection services, IConfigurationManager configuration)
+    public static void AddAppConfiguration(this IServiceCollection _, IConfigurationManager configuration)
     {
         var connectionString = configuration.GetConnectionString(ServiceConstants.AppConfiguration);
-        var label = configuration[ServiceConstants.Label] ?? ServiceConstants.Local;
+        var configLabel = configuration[ServiceConstants.Label];
+        var label = string.IsNullOrWhiteSpace(configLabel) ?
+            ServiceConstants.Local.ToLower() :
+            configLabel.ToLower() ;
 
         if (!string.IsNullOrWhiteSpace(connectionString))
         {

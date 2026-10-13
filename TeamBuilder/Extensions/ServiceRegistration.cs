@@ -11,7 +11,7 @@ public static class ServiceRegistration
 {
     public static void AddServices(this IServiceCollection services, IConfiguration configuration)
     {
-        // Add health checks and Razor Components
+        // Add health checks and razor components
         services.AddHealthChecks();
         services.AddRazorComponents().AddInteractiveServerComponents();
 
