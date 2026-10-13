@@ -61,6 +61,9 @@ if ($null -eq $existingServer) {
     if ([string]::IsNullOrWhiteSpace($SqlAdminPassword)) {
         throw "SQL server '$server' does not exist and no admin password was provided. Map the 'sqlAdminPassword' secret variable to the SQL_ADMIN_PASSWORD environment variable."
     }
+    if ($SqlAdminPassword -match '^\$\([^)]+\)$') {
+        throw "SQL admin password appears unresolved ('$SqlAdminPassword'). Define a secret pipeline variable named 'sqlAdminPassword' and map it to SQL_ADMIN_PASSWORD in the SQL Database task env block."
+    }
     Write-Host "SQL server '$server' does not exist. Creating..."
     $createServerOutput = az sql server create --name $server --resource-group $rg --location $names.Location --admin-user $adminUser --admin-password $SqlAdminPassword --minimal-tls-version $desiredMinTls --enable-public-network true 2>&1
     if ($LASTEXITCODE -ne 0) {
