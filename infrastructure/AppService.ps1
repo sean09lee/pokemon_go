@@ -27,7 +27,7 @@ $existingPlan = Get-AzResourceOrNull "az appservice plan show --name $plan --res
 
 if ($null -eq $existingPlan) {
     Write-Host "App Service plan '$plan' does not exist. Creating..."
-    az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --is-linux --tags $script:TagArguments | Out-Null
+    az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --tags $script:TagArguments | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to create App Service plan '$plan'." }
     Write-Host "Created App Service plan '$plan'."
 
