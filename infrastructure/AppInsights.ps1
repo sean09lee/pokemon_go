@@ -17,6 +17,30 @@ $appInsights = $names.AppInsights
 $desiredKind = 'web'
 $desiredRetentionDays = 90
 
+function Ensure-ProviderRegistered {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Namespace
+    )
+
+    $state = (az provider show --namespace $Namespace --query registrationState -o tsv 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $state -eq 'Registered') {
+        Write-Host "Resource provider '$Namespace' is already registered."
+        return
+    }
+
+    Write-Host "Registering resource provider '$Namespace'..."
+    az provider register --namespace $Namespace --wait | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to register resource provider '$Namespace'."
+    }
+
+    Write-Host "Resource provider '$Namespace' is registered."
+}
+
+Ensure-ProviderRegistered -Namespace 'Microsoft.Insights'
+Ensure-ProviderRegistered -Namespace 'Microsoft.OperationalInsights'
+
 Write-Host "Checking Application Insights '$appInsights'..."
 $existing = Get-AzResourceOrNull "az monitor app-insights component show --app $appInsights --resource-group $rg"
 

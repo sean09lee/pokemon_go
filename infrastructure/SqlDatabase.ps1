@@ -19,11 +19,39 @@ $server = $names.SqlServer
 $database = $names.SqlDatabase
 $adminUser = $names.SqlAdminUser
 
+# SQL admin login naming rules are stricter than many Azure resource names.
+if ($adminUser -notmatch '^[A-Za-z][A-Za-z0-9_@#$]{0,127}$') {
+    throw "SQL admin user '$adminUser' is invalid. Use 1-128 chars, start with a letter, and only include letters, numbers, or _ @ # $."
+}
+
 # Hardcoded desired state
 $desiredMinTls = '1.2'
 $desiredEdition = 'Basic'
 $desiredCapacity = 5
 $desiredMaxSize = '2GB'
+
+function Ensure-ProviderRegistered {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Namespace
+    )
+
+    $state = (az provider show --namespace $Namespace --query registrationState -o tsv 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $state -eq 'Registered') {
+        Write-Host "Resource provider '$Namespace' is already registered."
+        return
+    }
+
+    Write-Host "Registering resource provider '$Namespace'..."
+    az provider register --namespace $Namespace --wait | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to register resource provider '$Namespace'."
+    }
+
+    Write-Host "Resource provider '$Namespace' is registered."
+}
+
+Ensure-ProviderRegistered -Namespace 'Microsoft.Sql'
 
 # --- SQL server ---
 Write-Host "Checking SQL server '$server'..."
@@ -33,9 +61,20 @@ if ($null -eq $existingServer) {
     if ([string]::IsNullOrWhiteSpace($SqlAdminPassword)) {
         throw "SQL server '$server' does not exist and no admin password was provided. Map the 'sqlAdminPassword' secret variable to the SQL_ADMIN_PASSWORD environment variable."
     }
+    if ($SqlAdminPassword -match '^\$\([^)]+\)$') {
+        throw "SQL admin password appears unresolved ('$SqlAdminPassword'). Define a secret pipeline variable named 'sqlAdminPassword' and map it to SQL_ADMIN_PASSWORD in the SQL Database task env block."
+    }
     Write-Host "SQL server '$server' does not exist. Creating..."
-    az sql server create --name $server --resource-group $rg --location $names.Location --admin-user $adminUser --admin-password $SqlAdminPassword --minimal-tls-version $desiredMinTls --enable-public-network true | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Failed to create SQL server '$server'." }
+    $createServerOutput = az sql server create --name $server --resource-group $rg --location $names.Location --admin-user $adminUser --admin-password $SqlAdminPassword --minimal-tls-version $desiredMinTls --enable-public-network true 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $errorDetail = ($createServerOutput | Out-String).Trim()
+        if ([string]::IsNullOrWhiteSpace($errorDetail)) {
+            throw "Failed to create SQL server '$server'."
+        }
+
+        throw "Failed to create SQL server '$server'. Azure CLI output: $errorDetail"
+    }
+
     Write-Host "Created SQL server '$server'."
 }
 else {

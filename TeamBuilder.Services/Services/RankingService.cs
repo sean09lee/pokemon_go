@@ -1,12 +1,13 @@
 ﻿using TeamBuilder.Data.Models;
 using TeamBuilder.Data.Responses;
+using TeamBuilder.Services.Contracts;
 using TeamBuilder.Services.Helpers;
 
 namespace TeamBuilder.Services.Services;
 
-public class RankingService(PogoApiService pogoApiService)
+public class RankingService(IPogoApiService pogoApiService) : IRankingService
 {
-    private readonly PogoApiService _pogoApiService = pogoApiService;
+    private readonly IPogoApiService _pogoApiService = pogoApiService;
 
     public async Task<RankingResponse> BuildRankingResponseAsync(
         IEnumerable<Pokemon> ownedPokemon,

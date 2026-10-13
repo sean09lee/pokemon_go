@@ -1,12 +1,13 @@
 using TeamBuilder.AI;
 using TeamBuilder.Data.Models;
+using TeamBuilder.Services.Contracts;
 
 namespace TeamBuilder.Services.Services;
 
 /// <summary>
 /// Orchestrates AI Advisor chat conversations, delegating to the Azure AI Foundry client.
 /// </summary>
-public class AIAdvisorService(FoundryChatClient foundryChatClient)
+public class AIAdvisorService(FoundryChatClient foundryChatClient) : IAIAdvisorService
 {
     private readonly FoundryChatClient _foundryChatClient = foundryChatClient;
 

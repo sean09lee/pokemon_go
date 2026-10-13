@@ -4,18 +4,19 @@ using Azure.Identity;
 using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 using TeamBuilder.AI.Configuration;
+using TeamBuilder.AI.Contracts;
 
 namespace TeamBuilder.AI;
 
 /// <summary>
 /// Thin wrapper around the Azure AI Foundry chat completions client used by the AI Advisor feature.
 /// </summary>
-public class FoundryChatClient
+public class FoundryChatClient : IFoundryChatClient
 {
     private readonly ChatClient _chatClient;
     private readonly AIAdvisorOptions _options;
 
-    public FoundryChatClient(IOptions<AIAdvisorOptions> options)
+    public FoundryChatClient(IOptions<AIAdvisorOptions> options) 
     {
         _options = options.Value;
 

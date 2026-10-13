@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('dev', 'staging', 'prod')]
+    [ValidateSet('dev', 'test', 'prod')]
     [string]$Environment
 )
 
@@ -18,6 +18,7 @@ $webApp = $names.WebApp
 $desiredPlanSku = 'B1'
 $desiredFramework = 'v10.0'
 $desiredLinuxRuntime = 'DOTNETCORE|10.0'
+$desiredLinuxRuntimeArg = '"DOTNETCORE|10.0"'
 $desiredMinTls = '1.2'
 
 # --- App Service plan ---
@@ -46,7 +47,23 @@ else {
     }
 }
 
-$isLinuxPlan = [bool]$existingPlan.reserved
+# Detect plan OS from a stable CLI query first, then fall back to object fields.
+$reservedValue = (az appservice plan show --name $plan --resource-group $rg --query reserved -o tsv 2>$null)
+if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($reservedValue)) {
+    $isLinuxPlan = $reservedValue.Trim().ToLowerInvariant() -eq 'true'
+}
+elseif ($null -ne $existingPlan.reserved) {
+    $isLinuxPlan = [bool]$existingPlan.reserved
+}
+elseif ($null -ne $existingPlan.kind -and ($existingPlan.kind -as [string]).ToLowerInvariant().Contains('linux')) {
+    $isLinuxPlan = $true
+}
+else {
+    $isLinuxPlan = $false
+}
+
+$planOs = if ($isLinuxPlan) { 'Linux' } else { 'Windows' }
+Write-Host "Detected plan OS: $planOs."
 
 # --- Web app ---
 Write-Host "Checking web app '$webApp'..."
@@ -55,17 +72,33 @@ $existingApp = Get-AzResourceOrNull "az webapp show --name $webApp --resource-gr
 if ($null -eq $existingApp) {
     Write-Host "Web app '$webApp' does not exist. Creating..."
 
+    $createFailed = $false
+
     if ($isLinuxPlan) {
-        az webapp create --name $webApp --resource-group $rg --plan $plan --runtime $desiredLinuxRuntime --https-only true --tags $script:TagArguments | Out-Null
+        az webapp create --name $webApp --resource-group $rg --plan $plan --runtime $desiredLinuxRuntimeArg --https-only true --tags $script:TagArguments | Out-Null
     }
     else {
         az webapp create --name $webApp --resource-group $rg --plan $plan --https-only true --tags $script:TagArguments | Out-Null
     }
 
-    if ($LASTEXITCODE -ne 0) { throw "Failed to create web app '$webApp'." }
+    if ($LASTEXITCODE -ne 0) {
+        $createFailed = $true
+    }
+
+    # Some API responses do not expose plan OS consistently; retry with Linux runtime when create fails.
+    if ($createFailed -and -not $isLinuxPlan) {
+        Write-Host "Initial create failed. Retrying with Linux runtime '$desiredLinuxRuntime'..."
+        az webapp create --name $webApp --resource-group $rg --plan $plan --runtime $desiredLinuxRuntimeArg --https-only true --tags $script:TagArguments | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            $isLinuxPlan = $true
+            $createFailed = $false
+        }
+    }
+
+    if ($createFailed) { throw "Failed to create web app '$webApp'." }
 
     if ($isLinuxPlan) {
-        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntime --min-tls-version $desiredMinTls | Out-Null
+        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
     }
     else {
         az webapp config set --name $webApp --resource-group $rg --net-framework-version $desiredFramework --min-tls-version $desiredMinTls | Out-Null
@@ -105,7 +138,7 @@ if ($config.minTlsVersion -ne $desiredMinTls) {
 
 if ($needsConfigUpdate) {
     if ($isLinuxPlan) {
-        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntime --min-tls-version $desiredMinTls | Out-Null
+        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
     }
     else {
         az webapp config set --name $webApp --resource-group $rg --net-framework-version $desiredFramework --min-tls-version $desiredMinTls | Out-Null
