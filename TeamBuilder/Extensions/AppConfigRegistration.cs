@@ -24,8 +24,8 @@ public static class AppConfigRegistration
                     })
                     .ConfigureRefresh(refresh =>
                     {
-                        refresh.Register("Refresh", refreshAll: true);
-                        refresh.SetCacheExpiration(TimeSpan.FromMinutes(5));
+                        refresh.Register(ServiceConstants.Refresh, refreshAll: true);
+                        refresh.SetRefreshInterval(TimeSpan.FromMinutes(5));
                     });
             });
         }
