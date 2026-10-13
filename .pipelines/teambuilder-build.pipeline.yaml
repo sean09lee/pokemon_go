@@ -42,6 +42,7 @@ steps:
   inputs:
     command: 'test'
     projects: '$(testProjectPath)'
+    publishTestResults: false
     arguments: '--configuration $(buildConfiguration) --no-build --logger trx --results-directory $(Agent.TempDirectory)/TestResults'
 
 - task: PublishTestResults@2
