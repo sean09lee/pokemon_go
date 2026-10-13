@@ -1,5 +1,6 @@
 ﻿using Microsoft.Playwright;
 using TeamBuilder.Data.Models;
+using TeamBuilder.Services.Contracts;
 using TeamBuilder.Services.Helpers;
 
 namespace TeamBuilder.Services.Services;
@@ -7,9 +8,9 @@ namespace TeamBuilder.Services.Services;
 /// <summary>
 /// This service hits the pokemon go hub api to get tier list data
 /// </summary>
-public class HubApiService(CacheService cacheService)
+public class HubApiService(ICacheService cacheService) : IHubApiService
 {
-  private readonly CacheService _cacheService = cacheService;
+  private readonly ICacheService _cacheService = cacheService;
   private static readonly TimeSpan DefaultHubTimeout = TimeSpan.FromSeconds(90);
 
   public async Task<IList<HubRankedPokemon>> CrawlBestPerTypeAsync(string attackerType, int limit = 200, CancellationToken cancellationToken = default)

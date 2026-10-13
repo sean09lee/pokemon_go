@@ -1,7 +1,8 @@
 @page "/ai-agent"
 @using TeamBuilder.Data.Models
 @using TeamBuilder.Services.Services
-@inject AIAdvisorService AIAdvisorService
+@using TeamBuilder.Services.Contracts
+@inject IAIAdvisorService AIAdvisorService
 @rendermode InteractiveServer
 
 <PageTitle>AI Agent</PageTitle>
