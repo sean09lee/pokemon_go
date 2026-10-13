@@ -23,7 +23,7 @@ pr: none
 resources:
   pipelines:
   - pipeline: build
-    source: build.pipeline.yaml
+    source: 'TeamBuilder-Build'
     trigger: true
 
 # resourceGroup and webAppName are set at runtime by the 'Resolve resource names'

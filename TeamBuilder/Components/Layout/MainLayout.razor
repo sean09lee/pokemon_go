@@ -10,7 +10,6 @@
             <nav class="top-nav">
                 <NavLink href="" Match="NavLinkMatch.All">Home</NavLink>
                 <NavLink href="iv-lookup">IV Rank Checker</NavLink>
-                <NavLink href="ai-agent">AI Agent</NavLink>
             </nav>
             <span class="app-title">@_appTitle</span>
             <div class="top-row-spacer" aria-hidden="true"></div>
@@ -49,7 +48,6 @@
         _appTitle = relative switch
         {
             _ when string.Equals(relative, "iv-lookup", StringComparison.OrdinalIgnoreCase) => "IV Rank Checker",
-            _ when string.Equals(relative, "ai-agent", StringComparison.OrdinalIgnoreCase) => "AI Agent",
             _ => "Pokémon Go Team Builder"
         };
     }

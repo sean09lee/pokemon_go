@@ -1,0 +1,89 @@
+@using TeamBuilder.Data.Models
+@using TeamBuilder.Services.Contracts
+@inject IAIAdvisorService AIAdvisorService
+
+<div class="tb-ai-panel">
+    <div class="tb-ai-header">
+        <h2 class="tb-ai-title">AI Agent</h2>
+        <p class="tb-ai-subtitle">Ask about raid teams, IVs, or anything Pok&eacute;mon GO.</p>
+    </div>
+
+    <div class="tb-ai-history">
+        @foreach (var message in _conversation)
+        {
+            <div class="tb-ai-message @(message.IsUser ? "tb-ai-message-user" : "tb-ai-message-agent")">
+                <span class="tb-ai-message-sender">@(message.IsUser ? "You" : "AI Agent")</span>
+                <span class="tb-ai-message-text">@message.Text</span>
+            </div>
+        }
+
+        @if (_isSending)
+        {
+            <div class="tb-ai-message tb-ai-message-agent">
+                <span class="tb-ai-message-sender">AI Agent</span>
+                <span class="tb-ai-message-text"><em>Thinking...</em></span>
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-danger tb-ai-alert" role="alert">@_errorMessage</div>
+    }
+
+    <div class="tb-ai-input-row">
+        <input class="form-control"
+               type="text"
+               placeholder="Ask the AI Agent..."
+               @bind="_inputText"
+               @bind:event="oninput"
+               @onkeydown="HandleKeyDown"
+               disabled="@_isSending" />
+        <button class="btn btn-primary" type="button" @onclick="SendMessageAsync" disabled="@(_isSending || string.IsNullOrWhiteSpace(_inputText))">
+            Send
+        </button>
+    </div>
+</div>
+
+@code {
+    private readonly List<AiChatMessage> _conversation = new();
+    private string _inputText = string.Empty;
+    private string? _errorMessage;
+    private bool _isSending;
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !_isSending && !string.IsNullOrWhiteSpace(_inputText))
+        {
+            await SendMessageAsync();
+        }
+    }
+
+    private async Task SendMessageAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_inputText) || _isSending)
+        {
+            return;
+        }
+
+        _errorMessage = null;
+        var userMessage = new AiChatMessage { IsUser = true, Text = _inputText.Trim() };
+        _conversation.Add(userMessage);
+        _inputText = string.Empty;
+        _isSending = true;
+
+        try
+        {
+            var response = await AIAdvisorService.SendMessageAsync(_conversation);
+            _conversation.Add(response);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Something went wrong contacting the AI Agent: {ex.Message}";
+        }
+        finally
+        {
+            _isSending = false;
+        }
+    }
+}
