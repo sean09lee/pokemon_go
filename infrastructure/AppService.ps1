@@ -30,7 +30,7 @@ if ($null -eq $existingPlan) {
     # Capacity and provisioning errors can be transient; retry with backoff.
     $maxAttempts = 5
     for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-        az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --is-linux true --tags $script:TagArguments | Out-Null
+        az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --is-linux false --tags $script:TagArguments | Out-Null
         if ($LASTEXITCODE -eq 0) { break }
         if ($attempt -eq $maxAttempts) { throw "Failed to create App Service plan '$plan' after $maxAttempts attempts." }
         $delay = 30 * $attempt
