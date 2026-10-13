@@ -121,7 +121,21 @@ function Ensure-RoleAssignment {
     }
 
     Write-Host "Granting role '$RoleName' to group '$($script:AdminGroupName)'..."
-    az role assignment create --assignee-object-id $assignee --assignee-principal-type Group --role $RoleName --scope $Scope | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Failed to create role assignment '$RoleName' for group '$($script:AdminGroupName)' on scope '$Scope'." }
+    $createOutput = az role assignment create --assignee-object-id $assignee --assignee-principal-type Group --role $RoleName --scope $Scope 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        if (($createOutput | Out-String) -match 'AuthorizationFailed') {
+            $subscriptionId = (az account show --query id -o tsv)
+            $clientId = (az account show --query user.name -o tsv)
+            Write-Host ''
+            Write-Host 'The pipeline service principal is not allowed to create role assignments'
+            Write-Host '(Microsoft.Authorization/roleAssignments/write). Contributor is not enough.'
+            Write-Host "One-time fix - run this locally as yourself (after 'az login'), wait a few"
+            Write-Host 'minutes for propagation, then re-run the pipeline:'
+            Write-Host "  az role assignment create --assignee $clientId --assignee-principal-type ServicePrincipal --role `"Role Based Access Control Administrator`" --scope /subscriptions/$subscriptionId"
+        }
+
+        throw "Failed to create role assignment '$RoleName' for group '$($script:AdminGroupName)' on scope '$Scope'."
+    }
+
     Write-Host "Granted role '$RoleName' to group '$($script:AdminGroupName)'."
 }
