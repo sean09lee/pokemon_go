@@ -15,7 +15,7 @@ $plan = $names.Plan
 $webApp = $names.WebApp
 
 # Hardcoded desired state
-$desiredPlanSku = 'B1'
+$desiredPlanSku = 'F1'
 $desiredFramework = 'v10.0'
 $desiredLinuxRuntime = 'DOTNETCORE|10.0'
 $desiredLinuxRuntimeArg = '"DOTNETCORE|10.0"'
