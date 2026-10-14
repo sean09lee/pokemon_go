@@ -71,25 +71,49 @@ if ($null -eq $existing) {
     az monitor app-insights component create --app $appInsights --resource-group $rg --location $names.Location --kind $desiredKind --application-type web --workspace $workspaceResourceId --tags $script:TagArguments | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to create Application Insights '$appInsights'." }
     Write-Host "Created Application Insights '$appInsights'."
-    return
-}
-
-if ($existing.WorkspaceResourceId -ne $workspaceResourceId) {
-    Write-Warning "Application Insights '$appInsights' is linked to a different workspace ('$($existing.WorkspaceResourceId)' vs '$workspaceResourceId'). The workspace link cannot be changed after creation."
-}
-
-Write-Host "Application Insights '$appInsights' exists. Comparing properties..."
-
-if ($existing.kind -ne $desiredKind) {
-    Write-Warning "Kind drift detected ('$($existing.kind)' vs '$desiredKind'). Kind cannot be changed on an existing component."
-}
-
-if ($existing.RetentionInDays -ne $desiredRetentionDays) {
-    Write-Host "Retention drift detected ('$($existing.RetentionInDays)' vs '$desiredRetentionDays'). Updating..."
-    az monitor app-insights component update --app $appInsights --resource-group $rg --retention-time $desiredRetentionDays | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Failed to update Application Insights '$appInsights'." }
-    Write-Host "Updated Application Insights '$appInsights' retention."
 }
 else {
-    Write-Host "No drift detected on Application Insights '$appInsights'."
+    if ($existing.WorkspaceResourceId -ne $workspaceResourceId) {
+        Write-Warning "Application Insights '$appInsights' is linked to a different workspace ('$($existing.WorkspaceResourceId)' vs '$workspaceResourceId'). The workspace link cannot be changed after creation."
+    }
+
+    Write-Host "Application Insights '$appInsights' exists. Comparing properties..."
+
+    if ($existing.kind -ne $desiredKind) {
+        Write-Warning "Kind drift detected ('$($existing.kind)' vs '$desiredKind'). Kind cannot be changed on an existing component."
+    }
+
+    if ($existing.RetentionInDays -ne $desiredRetentionDays) {
+        Write-Host "Retention drift detected ('$($existing.RetentionInDays)' vs '$desiredRetentionDays'). Updating..."
+        az monitor app-insights component update --app $appInsights --resource-group $rg --retention-time $desiredRetentionDays | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to update Application Insights '$appInsights'." }
+        Write-Host "Updated Application Insights '$appInsights' retention."
+    }
+    else {
+        Write-Host "No drift detected on Application Insights '$appInsights'."
+    }
+}
+
+# --- Wire the connection string into the web app so the app actually reports telemetry ---
+$webApp = $names.WebApp
+$connectionString = az monitor app-insights component show --app $appInsights --resource-group $rg --query connectionString -o tsv
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($connectionString)) {
+    throw "Failed to resolve connection string for Application Insights '$appInsights'."
+}
+
+$existingWebApp = Get-AzResourceOrNull "az webapp show --name $webApp --resource-group $rg"
+if ($null -eq $existingWebApp) {
+    Write-Warning "Web app '$webApp' does not exist yet. Skipping Application Insights wiring; re-run this script after the web app is created."
+}
+else {
+    $currentSetting = az webapp config appsettings list --name $webApp --resource-group $rg --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" -o tsv
+    if ($currentSetting -ne $connectionString) {
+        Write-Host "Setting APPLICATIONINSIGHTS_CONNECTION_STRING on web app '$webApp'..."
+        az webapp config appsettings set --name $webApp --resource-group $rg --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connectionString" | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to set APPLICATIONINSIGHTS_CONNECTION_STRING on web app '$webApp'." }
+        Write-Host "Configured web app '$webApp' to send telemetry to Application Insights '$appInsights'."
+    }
+    else {
+        Write-Host "Web app '$webApp' is already configured with the current Application Insights connection string."
+    }
 }
