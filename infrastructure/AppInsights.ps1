@@ -68,7 +68,7 @@ $existing = Get-AzResourceOrNull "az monitor app-insights component show --app $
 
 if ($null -eq $existing) {
     Write-Host "Application Insights '$appInsights' does not exist. Creating..."
-    az monitor app-insights component create --app $appInsights --resource-group $rg --location $names.Location --kind $desiredKind --application-type web --retention-time $desiredRetentionDays --workspace $workspaceResourceId --tags $script:TagArguments | Out-Null
+    az monitor app-insights component create --app $appInsights --resource-group $rg --location $names.Location --kind $desiredKind --application-type web --workspace $workspaceResourceId --tags $script:TagArguments | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to create Application Insights '$appInsights'." }
     Write-Host "Created Application Insights '$appInsights'."
     return
