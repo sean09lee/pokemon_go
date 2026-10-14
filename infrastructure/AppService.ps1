@@ -15,10 +15,7 @@ $plan = $names.Plan
 $webApp = $names.WebApp
 
 # Hardcoded desired state
-# NOTE: temporarily using D1 (Shared) instead of F1 (Free) - F1 plan creation is
-# currently being throttled on this subscription. Switch back to 'F1' once that
-# clears.
-$desiredPlanSku = 'D1'
+$desiredPlanSku = 'F1'
 $desiredFramework = 'v10.0'
 $desiredWindowsRuntimeArg = 'dotnet:10'
 $desiredLinuxRuntime = 'DOTNETCORE|10.0'
