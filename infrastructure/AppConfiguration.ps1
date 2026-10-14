@@ -67,3 +67,13 @@ $appConfigScope = (az appconfig show --name $appConfig --resource-group $rg --qu
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($appConfigScope)) { throw "Failed to resolve the resource id for App Configuration '$appConfig'." }
 
 Ensure-RoleAssignment -Scope $appConfigScope -RoleName 'App Configuration Data Owner'
+
+# --- RBAC: grant the web app's managed identity read access to key-values ---
+$webApp = $names.WebApp
+$webAppPrincipalId = Get-WebAppPrincipalId -WebAppName $webApp -ResourceGroup $rg
+if ($null -eq $webAppPrincipalId) {
+    Write-Warning "Web app '$webApp' does not have a managed identity yet. Skipping App Configuration access grant; re-run this script after the web app's identity is assigned."
+}
+else {
+    Ensure-RoleAssignment -Scope $appConfigScope -RoleName 'App Configuration Data Reader' -AssigneeObjectId $webAppPrincipalId -PrincipalType 'ServicePrincipal' -AssigneeDisplayName "web app '$webApp'"
+}

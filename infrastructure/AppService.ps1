@@ -132,46 +132,61 @@ if ($null -eq $existingApp) {
 
     if ($LASTEXITCODE -ne 0) { throw "Failed to configure web app '$webApp'." }
     Write-Host "Created web app '$webApp'."
-    return
-}
-
-Write-Host "Web app '$webApp' exists. Comparing properties..."
-
-if ($existingApp.httpsOnly -ne $true) {
-    Write-Host "HTTPS-only drift detected. Enabling..."
-    az webapp update --name $webApp --resource-group $rg --set httpsOnly=true | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Failed to enable HTTPS-only on '$webApp'." }
-}
-
-$config = az webapp config show --name $webApp --resource-group $rg | ConvertFrom-Json
-$needsConfigUpdate = $false
-if ($isLinuxPlan) {
-    if ($config.linuxFxVersion -ne $desiredLinuxRuntime) {
-        Write-Host "Linux runtime drift detected ('$($config.linuxFxVersion)' vs '$desiredLinuxRuntime')."
-        $needsConfigUpdate = $true
-    }
 }
 else {
-    if ($config.netFrameworkVersion -ne $desiredFramework) {
-        Write-Host ".NET framework drift detected ('$($config.netFrameworkVersion)' vs '$desiredFramework')."
-        $needsConfigUpdate = $true
-    }
-}
-if ($config.minTlsVersion -ne $desiredMinTls) {
-    Write-Host "Minimum TLS drift detected ('$($config.minTlsVersion)' vs '$desiredMinTls')."
-    $needsConfigUpdate = $true
-}
+    Write-Host "Web app '$webApp' exists. Comparing properties..."
 
-if ($needsConfigUpdate) {
+    if ($existingApp.httpsOnly -ne $true) {
+        Write-Host "HTTPS-only drift detected. Enabling..."
+        az webapp update --name $webApp --resource-group $rg --set httpsOnly=true | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to enable HTTPS-only on '$webApp'." }
+    }
+
+    $config = az webapp config show --name $webApp --resource-group $rg | ConvertFrom-Json
+    $needsConfigUpdate = $false
     if ($isLinuxPlan) {
-        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
+        if ($config.linuxFxVersion -ne $desiredLinuxRuntime) {
+            Write-Host "Linux runtime drift detected ('$($config.linuxFxVersion)' vs '$desiredLinuxRuntime')."
+            $needsConfigUpdate = $true
+        }
     }
     else {
-        az webapp config set --name $webApp --resource-group $rg --runtime $desiredWindowsRuntimeArg --min-tls-version $desiredMinTls | Out-Null
+        if ($config.netFrameworkVersion -ne $desiredFramework) {
+            Write-Host ".NET framework drift detected ('$($config.netFrameworkVersion)' vs '$desiredFramework')."
+            $needsConfigUpdate = $true
+        }
     }
-    if ($LASTEXITCODE -ne 0) { throw "Failed to update config on web app '$webApp'." }
-    Write-Host "Updated web app '$webApp' configuration."
+    if ($config.minTlsVersion -ne $desiredMinTls) {
+        Write-Host "Minimum TLS drift detected ('$($config.minTlsVersion)' vs '$desiredMinTls')."
+        $needsConfigUpdate = $true
+    }
+
+    if ($needsConfigUpdate) {
+        if ($isLinuxPlan) {
+            az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
+        }
+        else {
+            az webapp config set --name $webApp --resource-group $rg --runtime $desiredWindowsRuntimeArg --min-tls-version $desiredMinTls | Out-Null
+        }
+        if ($LASTEXITCODE -ne 0) { throw "Failed to update config on web app '$webApp'." }
+        Write-Host "Updated web app '$webApp' configuration."
+    }
+    else {
+        Write-Host "No drift detected on web app '$webApp'."
+    }
+}
+
+# --- System-assigned managed identity ---
+# Grants the web app its own Entra identity so Key Vault/App Configuration RBAC roles
+# can be scoped to the app itself rather than relying on connection strings/secrets.
+Write-Host "Checking system-assigned managed identity on web app '$webApp'..."
+$identity = az webapp identity show --name $webApp --resource-group $rg | ConvertFrom-Json
+if ($null -eq $identity -or [string]::IsNullOrWhiteSpace($identity.principalId)) {
+    Write-Host "Assigning system-assigned managed identity to web app '$webApp'..."
+    az webapp identity assign --name $webApp --resource-group $rg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to assign managed identity to web app '$webApp'." }
+    Write-Host "Assigned system-assigned managed identity to web app '$webApp'."
 }
 else {
-    Write-Host "No drift detected on web app '$webApp'."
+    Write-Host "Web app '$webApp' already has a system-assigned managed identity."
 }
