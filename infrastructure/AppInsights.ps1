@@ -95,10 +95,16 @@ else {
 }
 
 # --- Wire the connection string into the web app so the app actually reports telemetry ---
+# Also set the instrumentation key and ApplicationInsightsAgent_EXTENSION_VERSION app
+# settings. These are what the Web App's "Application Insights" portal blade checks to
+# decide whether monitoring is "on" - without them the blade still prompts to "Turn on
+# Application Insights" even though the SDK-based connection string is already wired up.
 $webApp = $names.WebApp
-$connectionString = az monitor app-insights component show --app $appInsights --resource-group $rg --query connectionString -o tsv
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($connectionString)) {
-    throw "Failed to resolve connection string for Application Insights '$appInsights'."
+$component = az monitor app-insights component show --app $appInsights --resource-group $rg | ConvertFrom-Json
+$connectionString = $component.connectionString
+$instrumentationKey = $component.instrumentationKey
+if ([string]::IsNullOrWhiteSpace($connectionString) -or [string]::IsNullOrWhiteSpace($instrumentationKey)) {
+    throw "Failed to resolve connection string/instrumentation key for Application Insights '$appInsights'."
 }
 
 $existingWebApp = Get-AzResourceOrNull "az webapp show --name $webApp --resource-group $rg"
@@ -106,14 +112,31 @@ if ($null -eq $existingWebApp) {
     Write-Warning "Web app '$webApp' does not exist yet. Skipping Application Insights wiring; re-run this script after the web app is created."
 }
 else {
-    $currentSetting = az webapp config appsettings list --name $webApp --resource-group $rg --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" -o tsv
-    if ($currentSetting -ne $connectionString) {
-        Write-Host "Setting APPLICATIONINSIGHTS_CONNECTION_STRING on web app '$webApp'..."
-        az webapp config appsettings set --name $webApp --resource-group $rg --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connectionString" | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Failed to set APPLICATIONINSIGHTS_CONNECTION_STRING on web app '$webApp'." }
+    $desiredAppSettings = [ordered]@{
+        APPLICATIONINSIGHTS_CONNECTION_STRING       = $connectionString
+        APPINSIGHTS_INSTRUMENTATIONKEY               = $instrumentationKey
+        ApplicationInsightsAgent_EXTENSION_VERSION    = '~3'
+        XDT_MicrosoftApplicationInsights_Mode         = 'recommended'
+    }
+
+    $currentSettings = az webapp config appsettings list --name $webApp --resource-group $rg | ConvertFrom-Json
+    $currentMap = @{}
+    foreach ($setting in $currentSettings) { $currentMap[$setting.name] = $setting.value }
+
+    $settingsToApply = @()
+    foreach ($key in $desiredAppSettings.Keys) {
+        if ($currentMap[$key] -ne $desiredAppSettings[$key]) {
+            $settingsToApply += "$key=$($desiredAppSettings[$key])"
+        }
+    }
+
+    if ($settingsToApply.Count -gt 0) {
+        Write-Host "Setting Application Insights app settings on web app '$webApp': $($settingsToApply -join ', ')..."
+        az webapp config appsettings set --name $webApp --resource-group $rg --settings $settingsToApply | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to set Application Insights app settings on web app '$webApp'." }
         Write-Host "Configured web app '$webApp' to send telemetry to Application Insights '$appInsights'."
     }
     else {
-        Write-Host "Web app '$webApp' is already configured with the current Application Insights connection string."
+        Write-Host "Web app '$webApp' is already configured with the current Application Insights settings."
     }
 }
