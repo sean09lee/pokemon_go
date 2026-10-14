@@ -29,13 +29,20 @@ $existingPlan = Get-AzResourceOrNull "az appservice plan show --name $plan --res
 if ($null -eq $existingPlan) {
     Write-Host "App Service plan '$plan' does not exist. Creating..."
     # Capacity and provisioning errors can be transient; retry with backoff.
+    # Free (F1)/Shared (D1) tier creation is subject to a stricter, abuse-prevention
+    # throttle on the ARM side that takes much longer to clear than ordinary transient
+    # errors, so back off far more aggressively when that specific error is seen.
     $maxAttempts = 5
     for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-        az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --is-linux false --tags $script:TagArguments | Out-Null
+        $createOutput = az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --is-linux false --tags $script:TagArguments 2>&1
         if ($LASTEXITCODE -eq 0) { break }
-        if ($attempt -eq $maxAttempts) { throw "Failed to create App Service plan '$plan' after $maxAttempts attempts." }
-        $delay = 30 * $attempt
-        Write-Host "Plan creation failed (attempt $attempt/$maxAttempts). Retrying in $delay seconds..."
+        if ($attempt -eq $maxAttempts) { throw "Failed to create App Service plan '$plan' after $maxAttempts attempts. Last error: $($createOutput | Out-String)" }
+
+        $isThrottled = ($createOutput | Out-String) -match 'throttled'
+        $delay = if ($isThrottled) { 60 * [Math]::Pow(2, $attempt - 1) } else { 30 * $attempt }
+        $delay = [Math]::Min($delay, 300)
+        $reason = if ($isThrottled) { 'throttled' } else { 'failed' }
+        Write-Host "Plan creation $reason (attempt $attempt/$maxAttempts). Retrying in $delay seconds..."
         Start-Sleep -Seconds $delay
     }
     Write-Host "Created App Service plan '$plan'."
