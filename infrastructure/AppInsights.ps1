@@ -12,6 +12,7 @@ $ErrorActionPreference = 'Stop'
 $names = Get-InfraNames -Environment $Environment
 $rg = $names.ResourceGroup
 $appInsights = $names.AppInsights
+$logAnalytics = $names.LogAnalytics
 
 # Hardcoded desired state
 $desiredKind = 'web'
@@ -41,15 +42,40 @@ function Ensure-ProviderRegistered {
 Ensure-ProviderRegistered -Namespace 'Microsoft.Insights'
 Ensure-ProviderRegistered -Namespace 'Microsoft.OperationalInsights'
 
+# Application Insights is workspace-based. Create the Log Analytics workspace
+# explicitly in our resource group first - otherwise Azure auto-provisions a
+# "managed" workspace in a separate, auto-named resource group.
+Write-Host "Checking Log Analytics workspace '$logAnalytics'..."
+$existingWorkspace = Get-AzResourceOrNull "az monitor log-analytics workspace show --workspace-name $logAnalytics --resource-group $rg"
+
+if ($null -eq $existingWorkspace) {
+    Write-Host "Log Analytics workspace '$logAnalytics' does not exist. Creating..."
+    az monitor log-analytics workspace create --workspace-name $logAnalytics --resource-group $rg --location $names.Location --retention-time $desiredRetentionDays --tags $script:TagArguments | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to create Log Analytics workspace '$logAnalytics'." }
+    Write-Host "Created Log Analytics workspace '$logAnalytics'."
+}
+else {
+    Write-Host "Log Analytics workspace '$logAnalytics' exists."
+}
+
+$workspaceResourceId = az monitor log-analytics workspace show --workspace-name $logAnalytics --resource-group $rg --query id -o tsv
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($workspaceResourceId)) {
+    throw "Failed to resolve resource id for Log Analytics workspace '$logAnalytics'."
+}
+
 Write-Host "Checking Application Insights '$appInsights'..."
 $existing = Get-AzResourceOrNull "az monitor app-insights component show --app $appInsights --resource-group $rg"
 
 if ($null -eq $existing) {
     Write-Host "Application Insights '$appInsights' does not exist. Creating..."
-    az monitor app-insights component create --app $appInsights --resource-group $rg --location $names.Location --kind $desiredKind --application-type web --retention-time $desiredRetentionDays --tags $script:TagArguments | Out-Null
+    az monitor app-insights component create --app $appInsights --resource-group $rg --location $names.Location --kind $desiredKind --application-type web --retention-time $desiredRetentionDays --workspace $workspaceResourceId --tags $script:TagArguments | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to create Application Insights '$appInsights'." }
     Write-Host "Created Application Insights '$appInsights'."
     return
+}
+
+if ($existing.WorkspaceResourceId -ne $workspaceResourceId) {
+    Write-Warning "Application Insights '$appInsights' is linked to a different workspace ('$($existing.WorkspaceResourceId)' vs '$workspaceResourceId'). The workspace link cannot be changed after creation."
 }
 
 Write-Host "Application Insights '$appInsights' exists. Comparing properties..."

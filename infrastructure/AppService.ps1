@@ -17,6 +17,7 @@ $webApp = $names.WebApp
 # Hardcoded desired state
 $desiredPlanSku = 'F1'
 $desiredFramework = 'v10.0'
+$desiredWindowsRuntimeArg = 'dotnet:10'
 $desiredLinuxRuntime = 'DOTNETCORE|10.0'
 $desiredLinuxRuntimeArg = '"DOTNETCORE|10.0"'
 $desiredMinTls = '1.2'
@@ -116,7 +117,10 @@ if ($null -eq $existingApp) {
         az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
     }
     else {
-        az webapp config set --name $webApp --resource-group $rg --net-framework-version $desiredFramework --min-tls-version $desiredMinTls | Out-Null
+        # --runtime (rather than --net-framework-version) also populates the CURRENT_STACK
+        # metadata the portal/runtime use to select the stack. Without it the web app's
+        # Stack settings show as blank and the app fails to start.
+        az webapp config set --name $webApp --resource-group $rg --runtime $desiredWindowsRuntimeArg --min-tls-version $desiredMinTls | Out-Null
     }
 
     if ($LASTEXITCODE -ne 0) { throw "Failed to configure web app '$webApp'." }
@@ -156,7 +160,7 @@ if ($needsConfigUpdate) {
         az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
     }
     else {
-        az webapp config set --name $webApp --resource-group $rg --net-framework-version $desiredFramework --min-tls-version $desiredMinTls | Out-Null
+        az webapp config set --name $webApp --resource-group $rg --runtime $desiredWindowsRuntimeArg --min-tls-version $desiredMinTls | Out-Null
     }
     if ($LASTEXITCODE -ne 0) { throw "Failed to update config on web app '$webApp'." }
     Write-Host "Updated web app '$webApp' configuration."

@@ -57,6 +57,7 @@ function Get-InfraNames {
         Plan          = "teambuilder-plan$suffix-$unique"
         WebApp        = "teambuilder-web$suffix-$unique"
         AppInsights   = "teambuilder-insights$suffix-$unique"
+        LogAnalytics  = "teambuilder-logs$suffix-$unique"
         AppConfig     = "teambuilder-config$suffix-$unique"
         KeyVault      = "teambuilder-kv$suffix-$unique"
         SqlServer     = "teambuilder-sql$suffix-$unique"
