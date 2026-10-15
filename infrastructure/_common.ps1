@@ -57,6 +57,7 @@ function Get-InfraNames {
         Plan          = "teambuilder-plan$suffix-$unique"
         WebApp        = "teambuilder-web$suffix-$unique"
         AppInsights   = "teambuilder-insights$suffix-$unique"
+        LogAnalytics  = "teambuilder-logs$suffix-$unique"
         AppConfig     = "teambuilder-config$suffix-$unique"
         KeyVault      = "teambuilder-kv$suffix-$unique"
         SqlServer     = "teambuilder-sql$suffix-$unique"
@@ -110,18 +111,35 @@ function Ensure-RoleAssignment {
         [string]$Scope,
 
         [Parameter(Mandatory)]
-        [string]$RoleName
+        [string]$RoleName,
+
+        # Defaults to the admin group for backward compatibility with existing callers.
+        [string]$AssigneeObjectId,
+
+        [ValidateSet('Group', 'ServicePrincipal', 'User')]
+        [string]$PrincipalType = 'Group',
+
+        # Friendly name used only for log messages.
+        [string]$AssigneeDisplayName
     )
 
-    $assignee = Get-AdminGroupObjectId
-    $existing = az role assignment list --scope $Scope --role $RoleName --query "[?principalId=='$assignee'].id" -o tsv 2>$null
+    if ([string]::IsNullOrWhiteSpace($AssigneeObjectId)) {
+        $AssigneeObjectId = Get-AdminGroupObjectId
+        $PrincipalType = 'Group'
+        $AssigneeDisplayName = $script:AdminGroupName
+    }
+    elseif ([string]::IsNullOrWhiteSpace($AssigneeDisplayName)) {
+        $AssigneeDisplayName = $AssigneeObjectId
+    }
+
+    $existing = az role assignment list --scope $Scope --role $RoleName --query "[?principalId=='$AssigneeObjectId'].id" -o tsv 2>$null
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($existing | Out-String))) {
-        Write-Host "Role '$RoleName' is already assigned to group '$($script:AdminGroupName)'."
+        Write-Host "Role '$RoleName' is already assigned to '$AssigneeDisplayName'."
         return
     }
 
-    Write-Host "Granting role '$RoleName' to group '$($script:AdminGroupName)'..."
-    $createOutput = az role assignment create --assignee-object-id $assignee --assignee-principal-type Group --role $RoleName --scope $Scope 2>&1
+    Write-Host "Granting role '$RoleName' to '$AssigneeDisplayName'..."
+    $createOutput = az role assignment create --assignee-object-id $AssigneeObjectId --assignee-principal-type $PrincipalType --role $RoleName --scope $Scope 2>&1
     if ($LASTEXITCODE -ne 0) {
         if (($createOutput | Out-String) -match 'AuthorizationFailed') {
             $subscriptionId = (az account show --query id -o tsv)
@@ -134,8 +152,26 @@ function Ensure-RoleAssignment {
             Write-Host "  az role assignment create --assignee $clientId --assignee-principal-type ServicePrincipal --role `"Role Based Access Control Administrator`" --scope /subscriptions/$subscriptionId"
         }
 
-        throw "Failed to create role assignment '$RoleName' for group '$($script:AdminGroupName)' on scope '$Scope'."
+        throw "Failed to create role assignment '$RoleName' for '$AssigneeDisplayName' on scope '$Scope'."
     }
 
-    Write-Host "Granted role '$RoleName' to group '$($script:AdminGroupName)'."
+    Write-Host "Granted role '$RoleName' to '$AssigneeDisplayName'."
+}
+
+# Ensures the web app has a system-assigned managed identity and returns its principal id.
+function Get-WebAppPrincipalId {
+    param(
+        [Parameter(Mandatory)]
+        [string]$WebAppName,
+
+        [Parameter(Mandatory)]
+        [string]$ResourceGroup
+    )
+
+    $principalId = az webapp identity show --name $WebAppName --resource-group $ResourceGroup --query principalId -o tsv 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($principalId)) {
+        return $null
+    }
+
+    return $principalId
 }

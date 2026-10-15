@@ -7,6 +7,16 @@
   <Folder Name="/docs/">
     <File Path="../README.md" />
   </Folder>
+  <Folder Name="/infrastructure/">
+    <File Path="../infrastructure/AiFoundry.ps1" />
+    <File Path="../infrastructure/AppConfiguration.ps1" />
+    <File Path="../infrastructure/AppInsights.ps1" />
+    <File Path="../infrastructure/AppService.ps1" />
+    <File Path="../infrastructure/KeyVault.ps1" />
+    <File Path="../infrastructure/ResourceGroup.ps1" />
+    <File Path="../infrastructure/SqlDatabase.ps1" />
+    <File Path="../infrastructure/_common.ps1" />
+  </Folder>
   <Project Path="../TeamBuilder.AI/TeamBuilder.AI.csproj" />
   <Project Path="../TeamBuilder.Data/TeamBuilder.Data.csproj" />
   <Project Path="../TeamBuilder.Services/TeamBuilder.Services.csproj" />

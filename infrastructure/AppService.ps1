@@ -15,8 +15,9 @@ $plan = $names.Plan
 $webApp = $names.WebApp
 
 # Hardcoded desired state
-$desiredPlanSku = 'B1'
+$desiredPlanSku = $Environment -eq 'prod' ? 'D1' : 'F1'
 $desiredFramework = 'v10.0'
+$desiredWindowsRuntimeArg = 'dotnet:10'
 $desiredLinuxRuntime = 'DOTNETCORE|10.0'
 $desiredLinuxRuntimeArg = '"DOTNETCORE|10.0"'
 $desiredMinTls = '1.2'
@@ -27,8 +28,23 @@ $existingPlan = Get-AzResourceOrNull "az appservice plan show --name $plan --res
 
 if ($null -eq $existingPlan) {
     Write-Host "App Service plan '$plan' does not exist. Creating..."
-    az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --is-linux --tags $script:TagArguments | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Failed to create App Service plan '$plan'." }
+    # Capacity and provisioning errors can be transient; retry with backoff.
+    # Free (F1)/Shared (D1) tier creation is subject to a stricter, abuse-prevention
+    # throttle on the ARM side that takes much longer to clear than ordinary transient
+    # errors, so back off far more aggressively when that specific error is seen.
+    $maxAttempts = 5
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        $createOutput = az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --is-linux false --tags $script:TagArguments 2>&1
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($attempt -eq $maxAttempts) { throw "Failed to create App Service plan '$plan' after $maxAttempts attempts. Last error: $($createOutput | Out-String)" }
+
+        $isThrottled = ($createOutput | Out-String) -match 'throttled'
+        $delay = if ($isThrottled) { 60 * [Math]::Pow(2, $attempt - 1) } else { 30 * $attempt }
+        $delay = [Math]::Min($delay, 300)
+        $reason = if ($isThrottled) { 'throttled' } else { 'failed' }
+        Write-Host "Plan creation $reason (attempt $attempt/$maxAttempts). Retrying in $delay seconds..."
+        Start-Sleep -Seconds $delay
+    }
     Write-Host "Created App Service plan '$plan'."
 
     # Re-read the plan so runtime logic below can rely on plan OS information.
@@ -36,6 +52,13 @@ if ($null -eq $existingPlan) {
 }
 else {
     Write-Host "App Service plan '$plan' exists. Comparing properties..."
+    if ($desiredPlanSku -eq 'D1' -and (
+        $existingPlan.reserved -eq $true -or
+        ($null -ne $existingPlan.kind -and ($existingPlan.kind -as [string]).ToLowerInvariant().Contains('linux'))
+    )) {
+        throw "The Shared (D1) App Service tier requires a Windows plan. Existing plan '$plan' is Linux and cannot be converted in place."
+    }
+
     if ($existingPlan.sku.name -ne $desiredPlanSku) {
         Write-Host "SKU drift detected ('$($existingPlan.sku.name)' vs '$desiredPlanSku'). Updating..."
         az appservice plan update --name $plan --resource-group $rg --sku $desiredPlanSku | Out-Null
@@ -101,51 +124,69 @@ if ($null -eq $existingApp) {
         az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
     }
     else {
-        az webapp config set --name $webApp --resource-group $rg --net-framework-version $desiredFramework --min-tls-version $desiredMinTls | Out-Null
+        # --runtime (rather than --net-framework-version) also populates the CURRENT_STACK
+        # metadata the portal/runtime use to select the stack. Without it the web app's
+        # Stack settings show as blank and the app fails to start.
+        az webapp config set --name $webApp --resource-group $rg --runtime $desiredWindowsRuntimeArg --min-tls-version $desiredMinTls | Out-Null
     }
 
     if ($LASTEXITCODE -ne 0) { throw "Failed to configure web app '$webApp'." }
     Write-Host "Created web app '$webApp'."
-    return
-}
-
-Write-Host "Web app '$webApp' exists. Comparing properties..."
-
-if ($existingApp.httpsOnly -ne $true) {
-    Write-Host "HTTPS-only drift detected. Enabling..."
-    az webapp update --name $webApp --resource-group $rg --set httpsOnly=true | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Failed to enable HTTPS-only on '$webApp'." }
-}
-
-$config = az webapp config show --name $webApp --resource-group $rg | ConvertFrom-Json
-$needsConfigUpdate = $false
-if ($isLinuxPlan) {
-    if ($config.linuxFxVersion -ne $desiredLinuxRuntime) {
-        Write-Host "Linux runtime drift detected ('$($config.linuxFxVersion)' vs '$desiredLinuxRuntime')."
-        $needsConfigUpdate = $true
-    }
 }
 else {
-    if ($config.netFrameworkVersion -ne $desiredFramework) {
-        Write-Host ".NET framework drift detected ('$($config.netFrameworkVersion)' vs '$desiredFramework')."
-        $needsConfigUpdate = $true
-    }
-}
-if ($config.minTlsVersion -ne $desiredMinTls) {
-    Write-Host "Minimum TLS drift detected ('$($config.minTlsVersion)' vs '$desiredMinTls')."
-    $needsConfigUpdate = $true
-}
+    Write-Host "Web app '$webApp' exists. Comparing properties..."
 
-if ($needsConfigUpdate) {
+    if ($existingApp.httpsOnly -ne $true) {
+        Write-Host "HTTPS-only drift detected. Enabling..."
+        az webapp update --name $webApp --resource-group $rg --set httpsOnly=true | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to enable HTTPS-only on '$webApp'." }
+    }
+
+    $config = az webapp config show --name $webApp --resource-group $rg | ConvertFrom-Json
+    $needsConfigUpdate = $false
     if ($isLinuxPlan) {
-        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
+        if ($config.linuxFxVersion -ne $desiredLinuxRuntime) {
+            Write-Host "Linux runtime drift detected ('$($config.linuxFxVersion)' vs '$desiredLinuxRuntime')."
+            $needsConfigUpdate = $true
+        }
     }
     else {
-        az webapp config set --name $webApp --resource-group $rg --net-framework-version $desiredFramework --min-tls-version $desiredMinTls | Out-Null
+        if ($config.netFrameworkVersion -ne $desiredFramework) {
+            Write-Host ".NET framework drift detected ('$($config.netFrameworkVersion)' vs '$desiredFramework')."
+            $needsConfigUpdate = $true
+        }
     }
-    if ($LASTEXITCODE -ne 0) { throw "Failed to update config on web app '$webApp'." }
-    Write-Host "Updated web app '$webApp' configuration."
+    if ($config.minTlsVersion -ne $desiredMinTls) {
+        Write-Host "Minimum TLS drift detected ('$($config.minTlsVersion)' vs '$desiredMinTls')."
+        $needsConfigUpdate = $true
+    }
+
+    if ($needsConfigUpdate) {
+        if ($isLinuxPlan) {
+            az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
+        }
+        else {
+            az webapp config set --name $webApp --resource-group $rg --runtime $desiredWindowsRuntimeArg --min-tls-version $desiredMinTls | Out-Null
+        }
+        if ($LASTEXITCODE -ne 0) { throw "Failed to update config on web app '$webApp'." }
+        Write-Host "Updated web app '$webApp' configuration."
+    }
+    else {
+        Write-Host "No drift detected on web app '$webApp'."
+    }
+}
+
+# --- System-assigned managed identity ---
+# Grants the web app its own Entra identity so Key Vault/App Configuration RBAC roles
+# can be scoped to the app itself rather than relying on connection strings/secrets.
+Write-Host "Checking system-assigned managed identity on web app '$webApp'..."
+$identity = az webapp identity show --name $webApp --resource-group $rg | ConvertFrom-Json
+if ($null -eq $identity -or [string]::IsNullOrWhiteSpace($identity.principalId)) {
+    Write-Host "Assigning system-assigned managed identity to web app '$webApp'..."
+    az webapp identity assign --name $webApp --resource-group $rg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to assign managed identity to web app '$webApp'." }
+    Write-Host "Assigned system-assigned managed identity to web app '$webApp'."
 }
 else {
-    Write-Host "No drift detected on web app '$webApp'."
+    Write-Host "Web app '$webApp' already has a system-assigned managed identity."
 }
