@@ -82,3 +82,13 @@ $keyVaultScope = (az keyvault show --name $keyVault --resource-group $rg --query
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($keyVaultScope)) { throw "Failed to resolve the resource id for Key Vault '$keyVault'." }
 
 Ensure-RoleAssignment -Scope $keyVaultScope -RoleName 'Key Vault Secrets Officer'
+
+# --- RBAC: grant the web app's managed identity read access to secrets ---
+$webApp = $names.WebApp
+$webAppPrincipalId = Get-WebAppPrincipalId -WebAppName $webApp -ResourceGroup $rg
+if ($null -eq $webAppPrincipalId) {
+    Write-Warning "Web app '$webApp' does not have a managed identity yet. Skipping Key Vault access grant; re-run this script after the web app's identity is assigned."
+}
+else {
+    Ensure-RoleAssignment -Scope $keyVaultScope -RoleName 'Key Vault Secrets User' -AssigneeObjectId $webAppPrincipalId -PrincipalType 'ServicePrincipal' -AssigneeDisplayName "web app '$webApp'"
+}

@@ -9,7 +9,7 @@ public static class AppConfigRegistration
     public static void AddAppConfiguration(this IServiceCollection _, IConfigurationManager configuration)
     {
         var connectionString = configuration.GetConnectionString(ServiceConstants.AppConfiguration);
-        var configLabel = configuration[ServiceConstants.Label];
+        var configLabel = configuration.GetConnectionString(ServiceConstants.Label);
         var label = string.IsNullOrWhiteSpace(configLabel) ?
             ServiceConstants.Local.ToLower() :
             configLabel!.ToLower();
