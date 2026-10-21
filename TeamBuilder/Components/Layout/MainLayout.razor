@@ -4,21 +4,59 @@
 
 <PageTitle>@_appTitle</PageTitle>
 
-<div class="page">
-    <main>
-        <div class="top-row">
-            <nav class="top-nav">
-                <NavLink href="" Match="NavLinkMatch.All">Home</NavLink>
-                <NavLink href="iv-lookup">IV Rank Checker</NavLink>
-            </nav>
-            <span class="app-title">@_appTitle</span>
-            <div class="top-row-spacer" aria-hidden="true"></div>
+<div class="pokedex-shell">
+    <header class="pokedex-topbar">
+        <div class="pokedex-brand">
+            <span class="pokedex-logo-ball" aria-hidden="true">
+                <span class="pokedex-logo-ball-inner"></span>
+            </span>
+            <span class="pokedex-app-title">@_appTitle</span>
         </div>
 
-        <article class="content px-4">
+        <nav class="pokedex-nav">
+            <NavLink href="" Match="NavLinkMatch.All">Raid Builder</NavLink>
+            <NavLink href="iv-lookup">IV Rank</NavLink>
+            <span class="pokedex-nav-placeholder">My Pokemon</span>
+            <span class="pokedex-nav-placeholder">Tier Lists</span>
+        </nav>
+
+        <div class="pokedex-topbar-right">
+            <div class="pokedex-lights" aria-hidden="true">
+                <span class="pokedex-light red"></span>
+                <span class="pokedex-light yellow"></span>
+                <span class="pokedex-light green"></span>
+            </div>
+            <div class="pokedex-hamburger" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </header>
+
+    <main class="pokedex-screen">
+        <article class="content">
             @Body
         </article>
     </main>
+
+    <footer class="pokedex-bottombar">
+        <div class="pokedex-bottombar-inner">
+            <div class="pokedex-bracket" aria-hidden="true">
+                <div class="pokedex-vents">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+            <div class="pokedex-footer-ball" aria-hidden="true">
+                <span class="pokedex-footer-ball-center"></span>
+            </div>
+        </div>
+    </footer>
+
+    <span class="pokedex-stripe pokedex-stripe-top" aria-hidden="true"></span>
+    <span class="pokedex-stripe pokedex-stripe-bottom" aria-hidden="true"></span>
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>

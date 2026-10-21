@@ -28,73 +28,150 @@
 }
 
 <div class="tb-raid-page-shell">
-	<aside class="tb-raid-sidebar">
-		<button type="button"
-				class="tb-sidebar-link @(selectedSidebar == UploadSectionKey ? "active" : string.Empty)"
-				@onclick='@(() => SelectSidebarSection(UploadSectionKey))'>
-			Upload
-		</button>
-		<button type="button"
-				class="tb-sidebar-link @(selectedSidebar == HubSectionKey ? "active" : string.Empty)"
-				disabled="@(!ShowRaidSidebar)"
-				@onclick='@(() => SelectSidebarSection(HubSectionKey))'>
-			Hub Tier Lists
-		</button>
-		<button type="button"
-				class="tb-sidebar-link @(selectedSidebar == PokemonSectionKey ? "active" : string.Empty)"
-				disabled="@(!ShowRaidSidebar)"
-				@onclick='@(() => SelectSidebarSection(PokemonSectionKey))'>
-			Your Pokemon
-		</button>
-
-		<div class="tb-sidebar-group-title">Raid Teams</div>
-		@foreach (var section in raidSections)
-		{
-			var sectionKey = BuildRaidSectionKey(section.TypeKey);
-			<button type="button"
-					class="tb-sidebar-link @(selectedSidebar == sectionKey ? "active" : string.Empty)"
-					disabled="@(!ShowRaidSidebar)"
-					@onclick='@(() => SelectRaidSidebar(section.TypeKey))'>
-				@section.Label
-			</button>
-		}
-	</aside>
-
 	<section class="tb-raid-main">
+		@if (ShowRaidSidebar)
+		{
+			<div class="tb-raid-nav-pills">
+			<button type="button"
+					class="tb-sidebar-link @(selectedSidebar == UploadSectionKey ? "active" : string.Empty)"
+					@onclick='@(() => SelectSidebarSection(UploadSectionKey))'>
+				Upload
+			</button>
+			<button type="button"
+					class="tb-sidebar-link @(selectedSidebar == HubSectionKey ? "active" : string.Empty)"
+					disabled="@(!ShowRaidSidebar)"
+					@onclick='@(() => SelectSidebarSection(HubSectionKey))'>
+				Hub Tier Lists
+			</button>
+			<button type="button"
+					class="tb-sidebar-link @(selectedSidebar == PokemonSectionKey ? "active" : string.Empty)"
+					disabled="@(!ShowRaidSidebar)"
+					@onclick='@(() => SelectSidebarSection(PokemonSectionKey))'>
+				Your Pokemon
+			</button>
+
+			@if (raidSections.Count > 0)
+			{
+				<span class="tb-sidebar-group-title">Raid Teams</span>
+				@foreach (var section in raidSections)
+				{
+					var sectionKey = BuildRaidSectionKey(section.TypeKey);
+					<button type="button"
+							class="tb-sidebar-link @(selectedSidebar == sectionKey ? "active" : string.Empty)"
+							disabled="@(!ShowRaidSidebar)"
+							@onclick='@(() => SelectRaidSidebar(section.TypeKey))'>
+						@section.Label
+					</button>
+				}
+			}
+		</div>
+		}
+
 		@if (selectedSidebar == UploadSectionKey)
 		{
 			<div class="tb-home-shell">
-				<section id="steps" class="tb-hero-card mb-3">
-					<h1 class="tb-hero-title">Raid Team Builder</h1>
-					<p class="tb-hero-subtitle">Build optimized teams from your Poké Genie export in minutes.</p>
+				<div class="tb-eyebrow-row">
+									<span class="tb-eyebrow-icon" aria-hidden="true">&#x21bb;</span>
+									<span class="tb-eyebrow-text">RAID BUILDER</span>
+									<span class="tb-eyebrow-rule"></span>
+									<span class="tb-eyebrow-page">001</span>
+									<span class="tb-eyebrow-icon" aria-hidden="true">&#x21bb;</span>
+								</div>
 
-					<ol class="tb-steps">
-						<li>Download Poke Genie.</li>
-						<li>Scan all your Pokémon in Pokémon GO.</li>
-						<li>Export your Pokémon from Poke Genie to CSV.</li>
-						<li>Upload your exported CSV below.</li>
-						<li>Set stardust budget and answer candy prompts.</li>
-					</ol>
+								<section class="tb-upload-card mb-3">
+									<h1 class="tb-hero-title">Build your best <span class="tb-hero-highlight">raid team</span>.</h1>
+									<p class="tb-hero-subtitle">Upload a Poké Genie CSV to generate the strongest raid team from your roster and resources.</p>
 
-					<div class="tb-input-grid">
-						<div class="tb-input-item">
-							<label for="dustLimitInput" class="form-label">Stardust limit</label>
-							<input id="dustLimitInput" class="form-control" type="number" min="0" step="100"
-									   @bind="_dustLimit" @bind:event="oninput" disabled="@(_isLoading || _isTierLoading)" />
-						</div>
-						<div class="tb-input-item tb-upload-item">
-							<label for="pokemonCsvInput" class="btn btn-primary mb-0 @((_isLoading || _isTierLoading) ? "disabled" : string.Empty)">
-								@((_isLoading || _isTierLoading) ? "Processing..." : "Upload CSV")
-							</label>
-							<InputFile id="pokemonCsvInput" class="d-none" OnChange="OnCsvSelected" accept=".csv" disabled="@(_isLoading || _isTierLoading)" />
-						</div>
-					</div>
+										<div class="tb-upload-card-header">
+											<span class="tb-upload-card-icon" aria-hidden="true"><LucideIcon Name="file" Size="20" /></span>
+											<div class="tb-upload-card-heading">
+												<h2 class="tb-upload-card-title">Upload your Poké Genie CSV</h2>
+												<p class="tb-upload-card-subtitle">Drag and drop your CSV file here, or choose a file to get started.</p>
+											</div>
+											<button type="button" class="tb-settings-btn" @onclick="@(() => _showSettings = !_showSettings)">
+												<span aria-hidden="true"><LucideIcon Name="settings" Size="16" /></span> Settings
+											</button>
+										</div>
 
-					@if (!string.IsNullOrWhiteSpace(_errorMessage))
+										@if (_showSettings)
+										{
+											<div class="tb-settings-panel">
+												<label for="dustLimitInput" class="form-label">Stardust limit</label>
+												<input id="dustLimitInput" class="form-control" type="number" min="0" step="100"
+													   @bind="_dustLimit" @bind:event="oninput" disabled="@(_isLoading || _isTierLoading)" />
+											</div>
+										}
+
+										<label for="pokemonCsvInput" class="tb-dropzone @((_isLoading || _isTierLoading) ? "disabled" : string.Empty)">
+											<span class="tb-dropzone-icon" aria-hidden="true"><LucideIcon Name="cloud-upload" Size="28" /></span>
+											@if (_isLoading || _isTierLoading)
+											{
+												<span class="tb-dropzone-text">Processing...</span>
+											}
+											else
+											{
+												<span class="tb-dropzone-text">Drag and drop your Poké Genie CSV here</span>
+												<span class="tb-dropzone-or">or</span>
+												<span class="btn btn-primary tb-dropzone-btn">Choose File</span>
+											}
+											<span class="tb-dropzone-hint">Supports .csv files exported from Poké Genie.</span>
+										</label>
+										<InputFile id="pokemonCsvInput" class="d-none" OnChange="OnCsvSelected" accept=".csv" disabled="@(_isLoading || _isTierLoading)" />
+
+										@if (!string.IsNullOrWhiteSpace(_errorMessage))
 					{
 						<div class="alert alert-danger mt-3 mb-0" role="alert">@_errorMessage</div>
 					}
 				</section>
+
+				<section class="tb-how-it-works mb-3">
+					<h3 class="tb-section-label">How it works</h3>
+					<div class="tb-steps-row">
+						<div class="tb-step">
+							<span class="tb-step-badge">1</span>
+							<span class="tb-step-icon" aria-hidden="true"><LucideIcon Name="smartphone" Size="18" /></span>
+							<div class="tb-step-copy">
+								<div class="tb-step-title">Download Poke Genie</div>
+								<div class="tb-step-subtitle">Get the app on your phone.</div>
+							</div>
+						</div>
+						<span class="tb-step-chevron" aria-hidden="true"><LucideIcon Name="chevron-right" Size="18" /></span>
+						<div class="tb-step">
+							<span class="tb-step-badge">2</span>
+							<span class="tb-step-icon" aria-hidden="true"><LucideIcon Name="file-up" Size="18" /></span>
+							<div class="tb-step-copy">
+								<div class="tb-step-title">Export CSV</div>
+								<div class="tb-step-subtitle">Export your Pokémon data as a CSV file.</div>
+							</div>
+						</div>
+						<span class="tb-step-chevron" aria-hidden="true"><LucideIcon Name="chevron-right" Size="18" /></span>
+						<div class="tb-step">
+							<span class="tb-step-badge">3</span>
+							<span class="tb-step-icon" aria-hidden="true"><LucideIcon Name="upload" Size="18" /></span>
+							<div class="tb-step-copy">
+								<div class="tb-step-title">Upload File</div>
+								<div class="tb-step-subtitle">Upload your CSV to this tool.</div>
+							</div>
+						</div>
+						<span class="tb-step-chevron" aria-hidden="true"><LucideIcon Name="chevron-right" Size="18" /></span>
+						<div class="tb-step">
+							<span class="tb-step-badge">4</span>
+							<span class="tb-step-icon" aria-hidden="true"><LucideIcon Name="chart-no-axes-column-increasing" Size="18" /></span>
+							<div class="tb-step-copy">
+								<div class="tb-step-title">Get Your Best Team</div>
+								<div class="tb-step-subtitle">We'll analyze your roster and resources.</div>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				@if (_pokemon.Count == 0 && !_isLoading && !_isTierLoading)
+				{
+					<div class="tb-locked-bar">
+						<span class="tb-locked-icon" aria-hidden="true"><LucideIcon Name="lock-keyhole" Size="18" /></span>
+						<span>Upload your CSV to unlock My Pokémon and personalized team recommendations.</span>
+					</div>
+				}
 
 				@if (!string.IsNullOrWhiteSpace(_hubErrorMessage))
 				{
@@ -390,6 +467,7 @@
 	private bool _tierProgressHalted;
 	private CancellationTokenSource? _processingCts;
 	private int _dustLimit = 100000;
+	private bool _showSettings;
 
 	private const string UploadSectionKey = "upload";
 	private const string HubSectionKey = "hub";

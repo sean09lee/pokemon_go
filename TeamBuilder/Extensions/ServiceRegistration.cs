@@ -1,6 +1,7 @@
 ﻿using TeamBuilder.AI;
 using TeamBuilder.AI.Configuration;
 using TeamBuilder.Data.Constants;
+using TeamBuilder.HealthChecks;
 using TeamBuilder.Services.Contracts;
 using TeamBuilder.Services.Helpers;
 using TeamBuilder.Services.Services;
@@ -12,7 +13,9 @@ public static class ServiceRegistration
     public static void AddServices(this IServiceCollection services, IConfiguration configuration)
     {
         // Add health checks and razor components
-        services.AddHealthChecks();
+        services.AddHttpClient(nameof(PogoApiHealthCheck), client => client.BaseAddress = new Uri(ServiceConstants.BaseUri));
+        services.AddHealthChecks()
+            .AddCheck<PogoApiHealthCheck>("pogo-api", tags: ["ready"]);
         services.AddRazorComponents().AddInteractiveServerComponents();
 
         // Add singleton services

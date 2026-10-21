@@ -4,15 +4,59 @@
 
 <div class="tb-ai-panel">
     <div class="tb-ai-header">
-        <h2 class="tb-ai-title">AI Agent</h2>
-        <p class="tb-ai-subtitle">Ask about raid teams, IVs, or anything Pok&eacute;mon GO.</p>
+        <span class="tb-ai-eyebrow">PROFESSOR OAK</span>
+        <span class="tb-ai-dots" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+        </span>
     </div>
+
+    <div class="tb-ai-intro">
+        <span class="tb-ai-avatar" aria-hidden="true">
+            <LucideIcon Name="users" Size="22" />
+        </span>
+        <div>
+            <h2 class="tb-ai-title">Professor Oak</h2>
+            <p class="tb-ai-subtitle">Your Pokémon GO assistant</p>
+        </div>
+    </div>
+
+    @if (_conversation.Count == 0 && !_isSending)
+    {
+        <p class="tb-ai-welcome">
+            Welcome! I can help answer your questions about raids, using Poké Genie, exporting your data, and powering up Pokémon.
+        </p>
+
+        <div class="tb-ai-suggestions">
+            <button type="button" class="tb-ai-suggestion" @onclick='@(() => AskSuggestion("How do I export from Poké Genie?"))'>
+                <span class="tb-ai-suggestion-icon" aria-hidden="true"><LucideIcon Name="book-open" Size="16" /></span>
+                <span class="tb-ai-suggestion-text">How do I export from Poké Genie?</span>
+                <span class="tb-ai-suggestion-chevron" aria-hidden="true"><LucideIcon Name="chevron-right" Size="16" /></span>
+            </button>
+            <button type="button" class="tb-ai-suggestion" @onclick='@(() => AskSuggestion("What is a raid team?"))'>
+                <span class="tb-ai-suggestion-icon" aria-hidden="true"><LucideIcon Name="users" Size="16" /></span>
+                <span class="tb-ai-suggestion-text">What is a raid team?</span>
+                <span class="tb-ai-suggestion-chevron" aria-hidden="true"><LucideIcon Name="chevron-right" Size="16" /></span>
+            </button>
+            <button type="button" class="tb-ai-suggestion" @onclick='@(() => AskSuggestion("Which Pokémon are worth powering up?"))'>
+                <span class="tb-ai-suggestion-icon" aria-hidden="true"><LucideIcon Name="chart-no-axes-column-increasing" Size="16" /></span>
+                <span class="tb-ai-suggestion-text">Which Pokémon are worth powering up?</span>
+                <span class="tb-ai-suggestion-chevron" aria-hidden="true"><LucideIcon Name="chevron-right" Size="16" /></span>
+            </button>
+        </div>
+
+        <div class="tb-ai-tip">
+            <span class="tb-ai-tip-icon" aria-hidden="true"><LucideIcon Name="lightbulb" Size="16" /></span>
+            <span><strong>Tip:</strong> Uploading a CSV enables personalized recommendations based on your Pokémon, items, and resources.</span>
+        </div>
+    }
 
     <div class="tb-ai-history">
         @foreach (var message in _conversation)
         {
             <div class="tb-ai-message @(message.IsUser ? "tb-ai-message-user" : "tb-ai-message-agent")">
-                <span class="tb-ai-message-sender">@(message.IsUser ? "You" : "AI Agent")</span>
+                <span class="tb-ai-message-sender">@(message.IsUser ? "You" : "Professor Oak")</span>
                 <span class="tb-ai-message-text">@message.Text</span>
             </div>
         }
@@ -20,7 +64,7 @@
         @if (_isSending)
         {
             <div class="tb-ai-message tb-ai-message-agent">
-                <span class="tb-ai-message-sender">AI Agent</span>
+                <span class="tb-ai-message-sender">Professor Oak</span>
                 <span class="tb-ai-message-text"><em>Thinking...</em></span>
             </div>
         }
@@ -34,7 +78,7 @@
     <div class="tb-ai-input-row">
         <input class="form-control"
                type="text"
-               placeholder="Ask the AI Agent..."
+               placeholder="Ask Professor Oak..."
                @bind="_inputText"
                @bind:event="oninput"
                @onkeydown="HandleKeyDown"
@@ -59,6 +103,12 @@
         }
     }
 
+    private async Task AskSuggestion(string question)
+    {
+        _inputText = question;
+        await SendMessageAsync();
+    }
+
     private async Task SendMessageAsync()
     {
         if (string.IsNullOrWhiteSpace(_inputText) || _isSending)
@@ -79,7 +129,7 @@
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Something went wrong contacting the AI Agent: {ex.Message}";
+            _errorMessage = $"Something went wrong contacting Professor Oak: {ex.Message}";
         }
         finally
         {
@@ -87,3 +137,4 @@
         }
     }
 }
+
