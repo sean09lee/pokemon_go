@@ -22,6 +22,7 @@
 			   placeholder="Search by name (example: Snorlax)"
 			   @bind="_searchText"
 			   @bind:event="oninput"
+			   @bind:after="HandlePokemonSearchTextChanged"
 			   @onkeydown="HandlePokemonSearchKeyDown"
 			   disabled="@_isLoading" />
 
@@ -72,16 +73,16 @@
 			</div>
 
 			<div class="row g-2 mb-3">
-				<div class="col-md-3 col-6">
+				<div class="col-md-3 col-12">
 					<div class="stat-chip">Atk: @_selectedPokemon.BaseAttack</div>
 				</div>
-				<div class="col-md-3 col-6">
+				<div class="col-md-3 col-12">
 					<div class="stat-chip">Def: @_selectedPokemon.BaseDefense</div>
 				</div>
-				<div class="col-md-3 col-6">
+				<div class="col-md-3 col-12">
 					<div class="stat-chip">Sta: @_selectedPokemon.BaseStamina</div>
 				</div>
-				<div class="col-md-3 col-6">
+				<div class="col-md-3 col-12">
 					<div class="stat-chip">Combinations: @_rows.Count</div>
 				</div>
 			</div>
@@ -161,7 +162,7 @@
 				}
 			</div>
 
-			<div class="table-responsive">
+			<div class="iv-rank-table-wrap">
 				<table class="table table-sm table-striped align-middle iv-rank-table">
 					<thead>
 						<tr>
@@ -180,25 +181,27 @@
 						@foreach (var row in VisibleRows)
 						{
 							<tr class="@(IsHighlightedRow(row) ? "table-success" : string.Empty)">
-								<td>@row.Rank</td>
-								<td>@row.AtkIv/@row.DefIv/@row.StaIv</td>
-								<td>@row.Level.ToString("0.0")</td>
-								<td>@row.Cp</td>
-								<td>@row.AtkStat.ToString("0.00")</td>
-								<td>@row.DefStat.ToString("0.00")</td>
-								<td>@row.Hp</td>
-								<td>@row.StatProduct</td>
-								<td>@row.Percentile.ToString("0.00")%</td>
+								<td data-label="Rank">@row.Rank</td>
+								<td data-label="IVs">@row.AtkIv/@row.DefIv/@row.StaIv</td>
+								<td data-label="Level">@row.Level.ToString("0.0")</td>
+								<td data-label="CP">@row.Cp</td>
+								<td data-label="Atk">@row.AtkStat.ToString("0.00")</td>
+								<td data-label="Def">@row.DefStat.ToString("0.00")</td>
+								<td data-label="HP">@row.Hp</td>
+								<td data-label="Stat Product">@row.StatProduct</td>
+								<td data-label="Percentile">@row.Percentile.ToString("0.00")%</td>
 							</tr>
 						}
 					</tbody>
 				</table>
 			</div>
 
-			@if (_rows.Count > _visibleCount)
+			@if (TotalPages > 1)
 			{
-				<div class="d-flex justify-content-center mt-2">
-					<button class="btn btn-outline-light" @onclick="ShowMoreRows">Show more</button>
+				<div class="iv-pagination d-flex justify-content-center align-items-center gap-2 mt-3">
+					<button class="btn btn-outline-light btn-sm" disabled="@(_currentPage <= 1)" @onclick="GoToPreviousPage">Prev</button>
+					<span class="iv-pagination-label">Page @_currentPage of @TotalPages</span>
+					<button class="btn btn-outline-light btn-sm" disabled="@(_currentPage >= TotalPages)" @onclick="GoToNextPage">Next</button>
 				</div>
 			}
 		</div>
@@ -255,7 +258,8 @@
 	private int _inputAtkIv;
 	private int _inputDefIv;
 	private int _inputStaIv;
-	private int _visibleCount = 200;
+	private const int PageSize = 10;
+	private int _currentPage = 1;
 	private bool _isLoading;
 	private bool _leagueMenuOpen;
 	private int _leagueKeyboardIndex = -1;
@@ -278,7 +282,9 @@
 		}
 	}
 
-	private IEnumerable<IvRankRow> VisibleRows => _rows.Take(_visibleCount);
+	private IEnumerable<IvRankRow> VisibleRows => _rows.Skip((_currentPage - 1) * PageSize).Take(PageSize);
+
+	private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)PageSize));
 
 	private string SelectedLeagueLabel => _leagues.First(x => x.Cap == _selectedLeague).Label;
 	private string SelectedLeagueLogoPath => _leagues.First(x => x.Cap == _selectedLeague).LogoPath;
@@ -406,7 +412,7 @@
 			}
 		}
 
-		_visibleCount = 200;
+		_currentPage = 1;
 	}
 
 	private void FindCustomIvRank()
@@ -432,10 +438,7 @@
 		}
 
 		_highlightedRow = row;
-		if (row.Rank > _visibleCount)
-		{
-			_visibleCount = Math.Min(_rows.Count, row.Rank + 25);
-		}
+		_currentPage = (int)Math.Ceiling(row.Rank / (double)PageSize);
 
 		_customIvMessage = null;
 	}
@@ -448,9 +451,20 @@
 			&& row.StaIv == _highlightedRow.StaIv;
 	}
 
-	private void ShowMoreRows()
+	private void GoToPreviousPage()
 	{
-		_visibleCount = Math.Min(_rows.Count, _visibleCount + 200);
+		if (_currentPage > 1)
+		{
+			_currentPage--;
+		}
+	}
+
+	private void GoToNextPage()
+	{
+		if (_currentPage < TotalPages)
+		{
+			_currentPage++;
+		}
 	}
 
 	private void ToggleLeagueMenu()
@@ -518,6 +532,37 @@
 			case "Escape":
 				_leagueMenuOpen = false;
 				break;
+		}
+	}
+
+	private void HandlePokemonSearchTextChanged()
+	{
+		var term = _searchText.Trim();
+		if (string.IsNullOrWhiteSpace(term))
+		{
+			return;
+		}
+
+		if (_selectedPokemon is not null && string.Equals(term, _selectedPokemon.DisplayName, StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+
+		var exactMatch = _pokemonOptions.FirstOrDefault(x => string.Equals(x.DisplayName, term, StringComparison.OrdinalIgnoreCase));
+		if (exactMatch is not null)
+		{
+			SelectPokemon(exactMatch);
+			return;
+		}
+
+		var matches = _pokemonOptions
+			.Where(x => x.SearchText.Contains(term, StringComparison.OrdinalIgnoreCase))
+			.Take(2)
+			.ToList();
+
+		if (matches.Count == 1)
+		{
+			SelectPokemon(matches[0]);
 		}
 	}
 

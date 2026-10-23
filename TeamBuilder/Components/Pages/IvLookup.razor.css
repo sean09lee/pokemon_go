@@ -30,6 +30,22 @@
     width: 100%;
     max-width: 1200px;
     margin: 0 auto;
+    min-width: 0;
+}
+
+.iv-lookup-shell,
+.iv-lookup-shell * {
+    box-sizing: border-box;
+}
+
+.iv-lookup-shell .row {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.iv-lookup-shell .row > [class*="col-"] {
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
 }
 
 .tb-eyebrow-row {
@@ -61,6 +77,8 @@
     border: 1px solid #262f3a;
     border-radius: 12px;
     max-width: 980px;
+    width: 100%;
+    min-width: 0;
     margin-left: auto;
     margin-right: auto;
 }
@@ -121,6 +139,7 @@
 .pokemon-hero-sprite {
     width: 160px;
     height: 160px;
+    max-width: 100%;
     object-fit: contain;
     image-rendering: auto;
 }
@@ -271,8 +290,69 @@
     }
 }
 
+.iv-rank-table-wrap {
+    width: 100%;
+    min-width: 0;
+}
+
+.iv-pagination-label {
+    color: #c3cdd9;
+    font-size: 0.85rem;
+    font-weight: 600;
+    min-width: 7rem;
+    text-align: center;
+}
+
 .iv-rank-table thead th {
     white-space: nowrap;
+}
+
+@media (max-width: 640.98px) {
+    .iv-rank-table-wrap table,
+    .iv-rank-table-wrap thead,
+    .iv-rank-table-wrap tbody,
+    .iv-rank-table-wrap th,
+    .iv-rank-table-wrap td,
+    .iv-rank-table-wrap tr {
+        display: block;
+    }
+
+    .iv-rank-table-wrap thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+
+    .iv-rank-table-wrap tr {
+        margin-bottom: 0.75rem;
+        border: 1px solid #39414b;
+        border-radius: 8px;
+        padding: 0;
+        background: #1a2028;
+    }
+
+    .iv-rank-table-wrap .table > :not(caption) > * > td,
+    .iv-rank-table-wrap td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem !important;
+        border: none;
+        white-space: normal;
+        text-align: right;
+    }
+
+    .iv-rank-table-wrap td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.7rem;
+        letter-spacing: 0.04em;
+        color: #9aa7b5;
+        text-align: left;
+        margin-right: 0.5rem;
+    }
 }
 
 #pokemonSearch::placeholder {

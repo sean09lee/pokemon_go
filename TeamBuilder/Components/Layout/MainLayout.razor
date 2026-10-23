@@ -30,34 +30,36 @@
                 <span class="pokedex-light yellow"></span>
                 <span class="pokedex-light green"></span>
             </div>
-            <div class="pokedex-hamburger" aria-hidden="true">
+            <button type="button"
+                    class="pokedex-hamburger @(_mobileMenuOpen ? "open" : string.Empty)"
+                    aria-label="Toggle navigation menu"
+                    aria-expanded="@_mobileMenuOpen"
+                    @onclick="ToggleMobileMenu">
                 <span></span>
                 <span></span>
                 <span></span>
-            </div>
+            </button>
         </div>
     </header>
+
+    @if (_mobileMenuOpen)
+    {
+        <nav class="pokedex-mobile-nav">
+            <NavLink href="" Match="NavLinkMatch.All" @onclick="CloseMobileMenu">Raid Builder</NavLink>
+            <NavLink href="iv-lookup" @onclick="CloseMobileMenu">IV Rank</NavLink>
+            @if (UploadState.HasUploadedPokemon)
+            {
+                <span class="pokedex-nav-placeholder">My Pokemon</span>
+            }
+            <NavLink href="tier-lists" @onclick="CloseMobileMenu">Tier Lists</NavLink>
+        </nav>
+    }
 
     <main class="pokedex-screen">
         <article class="content">
             @Body
         </article>
     </main>
-
-    <footer class="pokedex-bottombar">
-        <div class="pokedex-bottombar-inner">
-            <span class="pokedex-line pokedex-line-left" aria-hidden="true"></span>
-            <div class="pokedex-vents" aria-hidden="true">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-            <span class="pokedex-line pokedex-line-right" aria-hidden="true"></span>
-            <div class="pokedex-footer-ball" aria-hidden="true">
-                <span class="pokedex-footer-ball-center"></span>
-            </div>
-        </div>
-    </footer>
 
     <div class="pokedex-corner-vents" aria-hidden="true">
         <span></span>
@@ -73,12 +75,23 @@
 
 @code {
     private string _appTitle = "Pokémon Go Team Builder";
+    private bool _mobileMenuOpen;
 
     protected override void OnInitialized()
     {
         SetAppTitle(NavigationManager.Uri);
         NavigationManager.LocationChanged += HandleLocationChanged;
         UploadState.Changed += HandleUploadStateChanged;
+    }
+
+    private void ToggleMobileMenu()
+    {
+        _mobileMenuOpen = !_mobileMenuOpen;
+    }
+
+    private void CloseMobileMenu()
+    {
+        _mobileMenuOpen = false;
     }
 
     private void HandleUploadStateChanged()
@@ -89,6 +102,7 @@
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         SetAppTitle(e.Location);
+        _mobileMenuOpen = false;
         _ = InvokeAsync(StateHasChanged);
     }
 
