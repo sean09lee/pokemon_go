@@ -1,14 +1,84 @@
+.iv-main {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    flex: 0 1 auto;
+    min-height: 0;
+    padding: 0.8rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: #141a22;
+    border: 1px solid #060a10;
+    border-radius: 0;
+    box-shadow:
+        inset 0 2px 6px rgba(0, 0, 0, 0.55),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.03),
+        0 1px 0 rgba(255, 255, 255, 0.04);
+    clip-path: polygon(
+        20px 0,
+        100% 0,
+        100% 100%,
+        20px 100%,
+        0 calc(100% - 20px),
+        0 20px
+    );
+}
+
 .iv-lookup-shell {
+    width: 100%;
     max-width: 1200px;
     margin: 0 auto;
+    min-width: 0;
+}
+
+.iv-lookup-shell,
+.iv-lookup-shell * {
+    box-sizing: border-box;
+}
+
+.iv-lookup-shell .row {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.iv-lookup-shell .row > [class*="col-"] {
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
+}
+
+.tb-eyebrow-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+    color: #7f93a8;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.tb-eyebrow-icon {
+    display: inline-flex;
+    align-items: center;
+    color: #4aa8ff;
+}
+
+.tb-eyebrow-rule {
+    flex: 1 1 auto;
+    height: 1px;
+    background: linear-gradient(90deg, #262f3a, transparent);
 }
 
 .iv-card {
-    background: linear-gradient(180deg, #232a33 0%, #1f252d 100%);
-    border: 1px solid #3a414a;
+    background: #1b222c;
+    border: 1px solid #262f3a;
     border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
     max-width: 980px;
+    width: 100%;
+    min-width: 0;
     margin-left: auto;
     margin-right: auto;
 }
@@ -69,6 +139,7 @@
 .pokemon-hero-sprite {
     width: 160px;
     height: 160px;
+    max-width: 100%;
     object-fit: contain;
     image-rendering: auto;
 }
@@ -219,8 +290,69 @@
     }
 }
 
+.iv-rank-table-wrap {
+    width: 100%;
+    min-width: 0;
+}
+
+.iv-pagination-label {
+    color: #c3cdd9;
+    font-size: 0.85rem;
+    font-weight: 600;
+    min-width: 7rem;
+    text-align: center;
+}
+
 .iv-rank-table thead th {
     white-space: nowrap;
+}
+
+@media (max-width: 640.98px) {
+    .iv-rank-table-wrap table,
+    .iv-rank-table-wrap thead,
+    .iv-rank-table-wrap tbody,
+    .iv-rank-table-wrap th,
+    .iv-rank-table-wrap td,
+    .iv-rank-table-wrap tr {
+        display: block;
+    }
+
+    .iv-rank-table-wrap thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+
+    .iv-rank-table-wrap tr {
+        margin-bottom: 0.75rem;
+        border: 1px solid #39414b;
+        border-radius: 8px;
+        padding: 0;
+        background: #1a2028;
+    }
+
+    .iv-rank-table-wrap .table > :not(caption) > * > td,
+    .iv-rank-table-wrap td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem !important;
+        border: none;
+        white-space: normal;
+        text-align: right;
+    }
+
+    .iv-rank-table-wrap td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.7rem;
+        letter-spacing: 0.04em;
+        color: #9aa7b5;
+        text-align: left;
+        margin-right: 0.5rem;
+    }
 }
 
 #pokemonSearch::placeholder {

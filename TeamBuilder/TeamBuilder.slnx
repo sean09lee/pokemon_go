@@ -5,6 +5,7 @@
     <File Path="../.pipelines/teambuilder-release.pipeline.yaml" />
   </Folder>
   <Folder Name="/docs/">
+    <File Path="../docs/ai-function-calling.md" />
     <File Path="../README.md" />
   </Folder>
   <Folder Name="/infrastructure/">

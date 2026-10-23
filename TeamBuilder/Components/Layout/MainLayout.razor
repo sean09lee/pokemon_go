@@ -1,27 +1,73 @@
 ﻿@inherits LayoutComponentBase
 @implements IDisposable
 @inject NavigationManager NavigationManager
+@inject PokemonUploadState UploadState
 
 <PageTitle>@_appTitle</PageTitle>
 
-<div class="page">
-    <main>
-        <div class="top-row">
-            <nav class="top-nav">
-                <NavLink href="" Match="NavLinkMatch.All">Home</NavLink>
-                <NavLink href="iv-lookup">IV Rank Checker</NavLink>
-            </nav>
-            <span class="app-title">@_appTitle</span>
-            <div class="top-row-spacer" aria-hidden="true"></div>
+<div class="pokedex-shell">
+    <header class="pokedex-topbar">
+        <div class="pokedex-brand">
+            <span class="pokedex-logo-ball" aria-hidden="true">
+                <span class="pokedex-logo-ball-inner"></span>
+            </span>
+            <span class="pokedex-app-title">@_appTitle</span>
         </div>
 
-        <article class="content px-4">
+        <nav class="pokedex-nav">
+            <NavLink href="" Match="NavLinkMatch.All">Raid Builder</NavLink>
+            <NavLink href="iv-lookup">IV Rank</NavLink>
+            @if (UploadState.HasUploadedPokemon)
+            {
+                <NavLink href="my-pokemon">My Pokemon</NavLink>
+            }
+            <NavLink href="tier-lists">Tier Lists</NavLink>
+        </nav>
+
+        <div class="pokedex-topbar-right">
+            <div class="pokedex-lights" aria-hidden="true">
+                <span class="pokedex-light red"></span>
+                <span class="pokedex-light yellow"></span>
+                <span class="pokedex-light green"></span>
+            </div>
+            <button type="button"
+                    class="pokedex-hamburger @(_mobileMenuOpen ? "open" : string.Empty)"
+                    aria-label="Toggle navigation menu"
+                    aria-expanded="@_mobileMenuOpen"
+                    @onclick="ToggleMobileMenu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </header>
+
+    @if (_mobileMenuOpen)
+    {
+        <nav class="pokedex-mobile-nav">
+            <NavLink href="" Match="NavLinkMatch.All" @onclick="CloseMobileMenu">Raid Builder</NavLink>
+            <NavLink href="iv-lookup" @onclick="CloseMobileMenu">IV Rank</NavLink>
+            @if (UploadState.HasUploadedPokemon)
+            {
+                <NavLink href="my-pokemon" @onclick="CloseMobileMenu">My Pokemon</NavLink>
+            }
+            <NavLink href="tier-lists" @onclick="CloseMobileMenu">Tier Lists</NavLink>
+        </nav>
+    }
+
+    <main class="pokedex-screen">
+        <article class="content">
             @Body
         </article>
     </main>
-</div>
 
-<div id="blazor-error-ui" data-nosnippet>
+    <div class="pokedex-corner-vents" aria-hidden="true">
+        <span></span>
+        <span></span>
+    </div>
+    </div>
+
+    <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
@@ -29,16 +75,34 @@
 
 @code {
     private string _appTitle = "Pokémon Go Team Builder";
+    private bool _mobileMenuOpen;
 
     protected override void OnInitialized()
     {
         SetAppTitle(NavigationManager.Uri);
         NavigationManager.LocationChanged += HandleLocationChanged;
+        UploadState.Changed += HandleUploadStateChanged;
+    }
+
+    private void ToggleMobileMenu()
+    {
+        _mobileMenuOpen = !_mobileMenuOpen;
+    }
+
+    private void CloseMobileMenu()
+    {
+        _mobileMenuOpen = false;
+    }
+
+    private void HandleUploadStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         SetAppTitle(e.Location);
+        _mobileMenuOpen = false;
         _ = InvokeAsync(StateHasChanged);
     }
 
@@ -55,5 +119,6 @@
     public void Dispose()
     {
         NavigationManager.LocationChanged -= HandleLocationChanged;
+        UploadState.Changed -= HandleUploadStateChanged;
     }
 }

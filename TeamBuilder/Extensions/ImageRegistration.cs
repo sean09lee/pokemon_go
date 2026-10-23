@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.FileProviders;
-using System.Runtime.CompilerServices;
 
 namespace TeamBuilder.Extensions;
 
