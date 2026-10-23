@@ -1,7 +1,9 @@
 ﻿using TeamBuilder.AI;
 using TeamBuilder.AI.Configuration;
+using TeamBuilder.AI.Contracts;
 using TeamBuilder.Data.Constants;
 using TeamBuilder.HealthChecks;
+using TeamBuilder.Services.AiTools;
 using TeamBuilder.Services.Contracts;
 using TeamBuilder.Services.Helpers;
 using TeamBuilder.Services.Services;
@@ -32,7 +34,11 @@ public static class ServiceRegistration
 
         // Add AI Advisor services
         services.Configure<AIAdvisorOptions>(configuration.GetSection(AIAdvisorOptions.SectionName));
-        services.AddSingleton<FoundryChatClient>();
+        services.AddSingleton<IFoundryChatClient, FoundryChatClient>();
+        services.AddScoped<IAiTool, GetBestPokemonByTypeTool>();
+        services.AddScoped<IAiTool, GetPokemonBaseStatsTool>();
+        services.AddScoped<IAiTool, GetPokemonTypesTool>();
+        services.AddScoped<IAiToolRegistry, AiToolRegistry>();
         services.AddScoped<IAIAdvisorService, AIAdvisorService>();
     }
 }
