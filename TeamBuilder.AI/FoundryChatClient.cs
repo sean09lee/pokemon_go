@@ -34,6 +34,11 @@ public class FoundryChatClient : IFoundryChatClient
         _chatClient = azureClient.GetChatClient(_options.DeploymentName);
     }
 
+    /// <summary>
+    /// The configured system prompt, if any, used to steer the AI Advisor's responses.
+    /// </summary>
+    public string? SystemPrompt => _options.SystemPrompt;
+
     public async Task<string> GetResponseAsync(IEnumerable<(bool IsUser, string Text)> conversation, CancellationToken cancellationToken = default)
     {
         var messages = new List<ChatMessage>();
@@ -52,5 +57,25 @@ public class FoundryChatClient : IFoundryChatClient
         return completion.Value.Content.Count > 0
             ? completion.Value.Content[0].Text
             : string.Empty;
+    }
+
+    /// <summary>
+    /// Sends a chat completion request that may invoke one or more function-calling tools, allowing
+    /// the caller to inspect requested tool calls, execute them, and continue the conversation.
+    /// </summary>
+    public async Task<ChatCompletion> CompleteAsync(IList<ChatMessage> messages, IReadOnlyList<ChatTool>? tools = null, CancellationToken cancellationToken = default)
+    {
+        var options = new ChatCompletionOptions();
+
+        if (tools is not null)
+        {
+            foreach (var tool in tools)
+            {
+                options.Tools.Add(tool);
+            }
+        }
+
+        var completion = await _chatClient.CompleteChatAsync(messages, options, cancellationToken);
+        return completion.Value;
     }
 }

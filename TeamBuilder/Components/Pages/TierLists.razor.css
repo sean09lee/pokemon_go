@@ -1,0 +1,129 @@
+.tl-main {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    flex: 0 1 auto;
+    min-height: 0;
+    padding: 0.8rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: #141a22;
+    border: 1px solid #060a10;
+    border-radius: 0;
+    box-shadow:
+        inset 0 2px 6px rgba(0, 0, 0, 0.55),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.03),
+        0 1px 0 rgba(255, 255, 255, 0.04);
+    clip-path: polygon(
+        20px 0,
+        100% 0,
+        100% 100%,
+        20px 100%,
+        0 calc(100% - 20px),
+        0 20px
+    );
+}
+
+.tl-shell {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.tl-card {
+    background: #1b222c;
+    border: 1px solid #262f3a;
+    border-radius: 12px;
+}
+
+.tl-section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.tb-eyebrow-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+    color: #7f93a8;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.tb-eyebrow-icon {
+    display: inline-flex;
+    align-items: center;
+    color: #4aa8ff;
+}
+
+.tb-eyebrow-rule {
+    flex: 1 1 auto;
+    height: 1px;
+    background: linear-gradient(90deg, #262f3a, transparent);
+}
+
+.tl-table-wrap {
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.tl-pagination-label {
+    color: #c3cdd9;
+    font-size: 0.85rem;
+    font-weight: 600;
+    min-width: 7rem;
+    text-align: center;
+}
+
+@media (max-width: 640.98px) {
+    .tl-table-wrap table,
+    .tl-table-wrap thead,
+    .tl-table-wrap tbody,
+    .tl-table-wrap th,
+    .tl-table-wrap td,
+    .tl-table-wrap tr {
+        display: block;
+    }
+
+    .tl-table-wrap thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+
+    .tl-table-wrap tr {
+        margin-bottom: 0.75rem;
+        border: 1px solid #39414b;
+        border-radius: 8px;
+        background: #1a2028;
+    }
+
+    .tl-table-wrap td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem !important;
+        border: none;
+        white-space: normal;
+        text-align: right;
+    }
+
+    .tl-table-wrap td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.7rem;
+        letter-spacing: 0.04em;
+        color: #9aa7b5;
+        text-align: left;
+        margin-right: 0.5rem;
+    }
+}

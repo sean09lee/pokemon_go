@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using TeamBuilder.Components;
 using TeamBuilder.Extensions;
+using TeamBuilder.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +25,15 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false,
+    ResponseWriter = HealthCheckResponseWriter.WriteResponse,
+});
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = HealthCheckResponseWriter.WriteResponse,
+});
 
 app.Run();
