@@ -20,6 +20,13 @@ public static class ServiceRegistration
         services.AddHealthChecks()
             .AddCheck<PogoApiHealthCheck>("pogo-api", tags: ["ready"]);
         services.AddRazorComponents().AddInteractiveServerComponents();
+        services.Configure<Microsoft.AspNetCore.SignalR.HubOptions>(options =>
+        {
+            // The Raid Builder page round-trips a sizable JSON payload (roster + ranking results)
+            // through JS interop when restoring from local storage; raise the default 32KB circuit
+            // message limit so that call doesn't get rejected and tear down the circuit.
+            options.MaximumReceiveMessageSize = 1024 * 1024;
+        });
 
         // Add singleton services
         services.AddSingleton<ICacheService, CacheService>();

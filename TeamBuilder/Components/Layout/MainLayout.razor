@@ -19,7 +19,7 @@
             <NavLink href="iv-lookup">IV Rank</NavLink>
             @if (UploadState.HasUploadedPokemon)
             {
-                <span class="pokedex-nav-placeholder">My Pokemon</span>
+                <NavLink href="my-pokemon">My Pokemon</NavLink>
             }
             <NavLink href="tier-lists">Tier Lists</NavLink>
         </nav>
@@ -49,7 +49,7 @@
             <NavLink href="iv-lookup" @onclick="CloseMobileMenu">IV Rank</NavLink>
             @if (UploadState.HasUploadedPokemon)
             {
-                <span class="pokedex-nav-placeholder">My Pokemon</span>
+                <NavLink href="my-pokemon" @onclick="CloseMobileMenu">My Pokemon</NavLink>
             }
             <NavLink href="tier-lists" @onclick="CloseMobileMenu">Tier Lists</NavLink>
         </nav>
