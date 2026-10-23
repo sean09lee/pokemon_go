@@ -37,9 +37,9 @@
                 <p class="text-muted mt-2">Loaded @_allTierRows.Count ranked entries across all attacker types.</p>
                 @foreach (var section in GetHubTierSections())
                 {
-                    <details class="mb-3" open>
+                    <details class="mb-3">
                         <summary class="fw-semibold">@section.Label Tier List (@section.TierList.Count entries)</summary>
-                        <div class="table-responsive mt-2">
+                        <div class="tl-table-wrap mt-2">
                             <table class="table table-striped table-sm">
                                 <thead>
                                     <tr>
@@ -55,23 +55,36 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var pokemon in section.TierList)
+                                    @foreach (var pokemon in GetVisibleRows(section))
                                     {
                                         <tr>
-                                            <td>@pokemon.Rank</td>
-                                            <td>@pokemon.PokemonNumber</td>
-                                            <td>@pokemon.Name</td>
-                                            <td>@pokemon.Form</td>
-                                            <td>@pokemon.FastAttack</td>
-                                            <td>@pokemon.ChargedAttack</td>
-                                            <td>@pokemon.DPS</td>
-                                            <td>@pokemon.TDO</td>
-                                            <td>@pokemon.Score</td>
+                                            <td data-label="Rank">@pokemon.Rank</td>
+                                            <td data-label="#">@pokemon.PokemonNumber</td>
+                                            <td data-label="Name">@pokemon.Name</td>
+                                            <td data-label="Form">@pokemon.Form</td>
+                                            <td data-label="Fast Attack">@pokemon.FastAttack</td>
+                                            <td data-label="Charged Attack">@pokemon.ChargedAttack</td>
+                                            <td data-label="DPS">@pokemon.DPS</td>
+                                            <td data-label="TDO">@pokemon.TDO</td>
+                                            <td data-label="Score">@pokemon.Score</td>
                                         </tr>
                                     }
                                 </tbody>
                             </table>
                         </div>
+
+                        @{
+                            var totalPages = GetTotalPages(section);
+                        }
+                        @if (totalPages > 1)
+                        {
+                            var currentPage = GetCurrentPage(section.Label);
+                            <div class="tl-pagination d-flex justify-content-center align-items-center gap-2 mt-2">
+                                <button class="btn btn-outline-light btn-sm" disabled="@(currentPage <= 1)" @onclick="() => GoToPreviousPage(section.Label)">Prev</button>
+                                <span class="tl-pagination-label">Page @currentPage of @totalPages</span>
+                                <button class="btn btn-outline-light btn-sm" disabled="@(currentPage >= totalPages)" @onclick="() => GoToNextPage(section.Label, totalPages)">Next</button>
+                            </div>
+                        }
                     </details>
                 }
             }
@@ -88,6 +101,8 @@
     ];
 
     private readonly List<HubTierRow> _allTierRows = [];
+    private readonly Dictionary<string, int> _currentPageBySection = new(StringComparer.OrdinalIgnoreCase);
+    private const int PageSize = 10;
     private bool _isLoading;
     private string? _errorMessage;
     private string _progressMessage = "Idle";
@@ -192,6 +207,40 @@
                 Label = char.ToUpperInvariant(attackerType[0]) + attackerType[1..],
                 TierList = tierList
             };
+        }
+    }
+
+    private int GetCurrentPage(string sectionLabel)
+    {
+        return _currentPageBySection.TryGetValue(sectionLabel, out var page) ? page : 1;
+    }
+
+    private static int GetTotalPages(HubTierSection section)
+    {
+        return Math.Max(1, (int)Math.Ceiling(section.TierList.Count / (double)PageSize));
+    }
+
+    private IEnumerable<HubRankedPokemon> GetVisibleRows(HubTierSection section)
+    {
+        var currentPage = GetCurrentPage(section.Label);
+        return section.TierList.Skip((currentPage - 1) * PageSize).Take(PageSize);
+    }
+
+    private void GoToPreviousPage(string sectionLabel)
+    {
+        var currentPage = GetCurrentPage(sectionLabel);
+        if (currentPage > 1)
+        {
+            _currentPageBySection[sectionLabel] = currentPage - 1;
+        }
+    }
+
+    private void GoToNextPage(string sectionLabel, int totalPages)
+    {
+        var currentPage = GetCurrentPage(sectionLabel);
+        if (currentPage < totalPages)
+        {
+            _currentPageBySection[sectionLabel] = currentPage + 1;
         }
     }
 }
