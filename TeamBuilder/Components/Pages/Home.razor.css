@@ -66,6 +66,8 @@
 }
 
 .tb-eyebrow-icon {
+    display: inline-flex;
+    align-items: center;
     color: #4aa8ff;
 }
 
