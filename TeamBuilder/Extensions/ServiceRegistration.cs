@@ -7,6 +7,7 @@ using TeamBuilder.Services.AiTools;
 using TeamBuilder.Services.Contracts;
 using TeamBuilder.Services.Helpers;
 using TeamBuilder.Services.Services;
+using TeamBuilder.State;
 
 namespace TeamBuilder.Extensions;
 
@@ -28,6 +29,7 @@ public static class ServiceRegistration
         services.AddScoped<IRankingService, RankingService>();
         services.AddScoped<IHubApiService, HubApiService>();
         services.AddScoped<IPogoApiService, PogoApiService>();
+        services.AddScoped<PokemonUploadState>();
 
         // Add helper services
         services.AddHttpClient<PogoHelpers>(client => client.BaseAddress = new Uri(ServiceConstants.BaseUri));

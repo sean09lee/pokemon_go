@@ -1,6 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @implements IDisposable
 @inject NavigationManager NavigationManager
+@inject PokemonUploadState UploadState
 
 <PageTitle>@_appTitle</PageTitle>
 
@@ -16,8 +17,11 @@
         <nav class="pokedex-nav">
             <NavLink href="" Match="NavLinkMatch.All">Raid Builder</NavLink>
             <NavLink href="iv-lookup">IV Rank</NavLink>
-            <span class="pokedex-nav-placeholder">My Pokemon</span>
-            <span class="pokedex-nav-placeholder">Tier Lists</span>
+            @if (UploadState.HasUploadedPokemon)
+            {
+                <span class="pokedex-nav-placeholder">My Pokemon</span>
+            }
+            <NavLink href="tier-lists">Tier Lists</NavLink>
         </nav>
 
         <div class="pokedex-topbar-right">
@@ -42,13 +46,13 @@
 
     <footer class="pokedex-bottombar">
         <div class="pokedex-bottombar-inner">
-            <div class="pokedex-bracket" aria-hidden="true">
-                <div class="pokedex-vents">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
+            <span class="pokedex-line pokedex-line-left" aria-hidden="true"></span>
+            <div class="pokedex-vents" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
             </div>
+            <span class="pokedex-line pokedex-line-right" aria-hidden="true"></span>
             <div class="pokedex-footer-ball" aria-hidden="true">
                 <span class="pokedex-footer-ball-center"></span>
             </div>
@@ -74,6 +78,12 @@
     {
         SetAppTitle(NavigationManager.Uri);
         NavigationManager.LocationChanged += HandleLocationChanged;
+        UploadState.Changed += HandleUploadStateChanged;
+    }
+
+    private void HandleUploadStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -95,5 +105,6 @@
     public void Dispose()
     {
         NavigationManager.LocationChanged -= HandleLocationChanged;
+        UploadState.Changed -= HandleUploadStateChanged;
     }
 }
