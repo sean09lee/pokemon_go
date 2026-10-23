@@ -418,6 +418,12 @@
     color: #ffffff;
 }
 
+.tb-raid-main-wrap {
+    position: relative;
+    min-height: 0;
+    height: 100%;
+}
+
 .tb-raid-main {
     padding: 0.8rem;
     height: 100%;
