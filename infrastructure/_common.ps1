@@ -38,8 +38,7 @@ function Get-UniqueSuffix {
     return $script:UniqueSuffix
 }
 
-# Hardcoded naming convention. Every name gets the unique suffix; production
-# additionally omits the environment segment.
+# Resource names include the environment segment and unique suffix in every environment.
 function Get-InfraNames {
     param(
         [Parameter(Mandatory)]
@@ -47,7 +46,7 @@ function Get-InfraNames {
         [string]$Environment
     )
 
-    $suffix = $Environment -eq 'prod' ? '' : "-$Environment"
+    $suffix = "-$Environment"
     $unique = Get-UniqueSuffix
 
     [ordered]@{
