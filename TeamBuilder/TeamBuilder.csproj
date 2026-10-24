@@ -17,12 +17,4 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.AzureAppConfiguration" Version="8.6.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="..\wwwroot\assets\images\**\*">
-      <Link>wwwroot\assets\images\%(RecursiveDir)%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
-  </ItemGroup>
-
 </Project>
