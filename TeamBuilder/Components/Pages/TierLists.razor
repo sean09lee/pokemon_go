@@ -1,95 +1,143 @@
 @page "/tier-lists"
 @using TeamBuilder.Data.Models
 @using TeamBuilder.Services.Contracts
+@using TeamBuilder.Components.Shared
 @inject IHubTierListService HubTierListService
+@inject TeamBuilder.State.PokemonUploadState UploadState
 
 <PageTitle>Tier Lists</PageTitle>
 
-<div class="tl-main">
-    <div class="tb-eyebrow-row">
-        <span class="tb-eyebrow-icon" aria-hidden="true"><LucideIcon Name="chart-no-axes-column-increasing" Size="14" /></span>
-        <span class="tb-eyebrow-text">TIER LISTS</span>
-        <span class="tb-eyebrow-rule"></span>
-    </div>
+<div class="tb-raid-page-shell @(UploadState.Pokemon.Count > 0 ? "has-my-pokemon" : string.Empty)">
+    @if (UploadState.Pokemon.Count > 0)
+    {
+        <div class="tb-my-pokemon-wrapper">
+            <MyPokemonSection Pokemon="UploadState.Pokemon" />
+        </div>
+    }
+    <section class="tb-raid-main">
+        <div class="tl-page-header">
+            <h1 class="tl-page-title">Tier Lists</h1>
+            <p class="tl-page-subtitle">See the best Pok&eacute;mon for raids, ranked by type. Rankings are based on overall performance, consistency, and ease of use.</p>
+        </div>
 
-    <div class="tl-shell">
-        <div class="tl-card p-3 mb-3">
-            <h2 class="tl-section-title">Hub Tier Lists</h2>
-
-            @if (_isLoading)
-            {
-                <p class="text-muted mb-1">@_progressMessage</p>
-                <div class="progress" role="progressbar" aria-valuenow="@_progressPercent" aria-valuemin="0" aria-valuemax="100">
-                    <div class="progress-bar" style="width: @(_progressPercent)%"></div>
-                </div>
-            }
-            else if (!string.IsNullOrWhiteSpace(_errorMessage))
-            {
-                <div class="alert alert-danger mt-2" role="alert">@_errorMessage</div>
-                <button type="button" class="btn btn-outline-light mt-2" @onclick="LoadTierListsAsync">Retry</button>
-            }
-            else if (_allTierRows.Count == 0)
-            {
-                <p class="text-muted">No tier list data is currently available.</p>
-            }
-            else
-            {
-                <p class="text-muted mt-2">Loaded @_allTierRows.Count ranked entries across all attacker types.</p>
-                @foreach (var section in GetHubTierSections())
+        @if (_isLoading)
+        {
+            <p class="text-muted mb-1">@_progressMessage</p>
+            <div class="progress" role="progressbar" aria-valuenow="@_progressPercent" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress-bar" style="width: @(_progressPercent)%"></div>
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <div class="alert alert-danger mt-2" role="alert">@_errorMessage</div>
+            <button type="button" class="btn btn-outline-light mt-2" @onclick="LoadTierListsAsync">Retry</button>
+        }
+        else if (_allTierRows.Count == 0)
+        {
+            <p class="text-muted">No tier list data is currently available.</p>
+        }
+        else
+        {
+            <div class="tb-type-grid">
+                @foreach (var attackerType in _attackerTypes)
                 {
-                    <details class="mb-3">
-                        <summary class="fw-semibold">@section.Label Tier List (@section.TierList.Count entries)</summary>
-                        <div class="tl-table-wrap mt-2">
-                            <table class="table table-striped table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Rank</th>
-                                        <th>#</th>
-                                        <th>Name</th>
-                                        <th>Form</th>
-                                        <th>Fast Attack</th>
-                                        <th>Charged Attack</th>
-                                        <th>DPS</th>
-                                        <th>TDO</th>
-                                        <th>Score</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var pokemon in GetVisibleRows(section))
-                                    {
-                                        <tr>
-                                            <td data-label="Rank">@pokemon.Rank</td>
-                                            <td data-label="#">@pokemon.PokemonNumber</td>
-                                            <td data-label="Name">@pokemon.Name</td>
-                                            <td data-label="Form">@pokemon.Form</td>
-                                            <td data-label="Fast Attack">@pokemon.FastAttack</td>
-                                            <td data-label="Charged Attack">@pokemon.ChargedAttack</td>
-                                            <td data-label="DPS">@pokemon.DPS</td>
-                                            <td data-label="TDO">@pokemon.TDO</td>
-                                            <td data-label="Score">@pokemon.Score</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                    var hasSection = _allTierRows.Any(x => string.Equals(x.AttackerType, attackerType, StringComparison.OrdinalIgnoreCase));
+                    if (!hasSection)
+                    {
+                        continue;
+                    }
 
-                        @{
-                            var totalPages = GetTotalPages(section);
-                        }
-                        @if (totalPages > 1)
-                        {
-                            var currentPage = GetCurrentPage(section.Label);
-                            <div class="tl-pagination d-flex justify-content-center align-items-center gap-2 mt-2">
-                                <button class="btn btn-outline-light btn-sm" disabled="@(currentPage <= 1)" @onclick="() => GoToPreviousPage(section.Label)">Prev</button>
-                                <span class="tl-pagination-label">Page @currentPage of @totalPages</span>
-                                <button class="btn btn-outline-light btn-sm" disabled="@(currentPage >= totalPages)" @onclick="() => GoToNextPage(section.Label, totalPages)">Next</button>
-                            </div>
-                        }
-                    </details>
+                    var typeMeta = GetTypeMeta(attackerType);
+                    <button type="button"
+                            class="tb-type-btn @typeMeta.CssClass @(_selectedAttackerType == attackerType ? "active" : string.Empty)"
+                            @onclick="@(() => _selectedAttackerType = attackerType)">
+                        <LucideIcon Name="@typeMeta.Icon" Size="16" />
+                        <span>@CapitalizeLabel(attackerType)</span>
+                    </button>
+                }
+            </div>
+
+            var selectedSection = GetHubTierSections().FirstOrDefault(x => string.Equals(x.Label, CapitalizeLabel(_selectedAttackerType ?? string.Empty), StringComparison.OrdinalIgnoreCase));
+
+            @if (selectedSection is not null)
+            {
+                var selectedTypeMeta = GetTypeMeta(_selectedAttackerType ?? string.Empty);
+                <div class="tb-raid-results-header">
+                    <span class="tb-raid-results-icon @selectedTypeMeta.CssClass" aria-hidden="true"><LucideIcon Name="@selectedTypeMeta.Icon" Size="20" /></span>
+                    <div class="tb-raid-results-text">
+                        <h2 class="tb-section-title mb-0">@selectedSection.Label-type Raid Tier List</h2>
+                        <p class="tb-section-subtitle mb-0">Best @selectedSection.Label.ToLowerInvariant()-type attackers for raids, ranked by overall performance (DPS, TDO, type effectiveness, and ease of use).</p>
+                    </div>
+                    <a class="tl-how-rankings-work" href="https://thepokemonhub.com" target="_blank" rel="noopener noreferrer">
+                        <LucideIcon Name="message-circle-question" Size="14" /> How rankings work?
+                    </a>
+                </div>
+
+                <div class="tl-table-wrap mt-2">
+                    <table class="tl-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Pok&eacute;mon</th>
+                                <th>DPS (ER)</th>
+                                <th>TDO (ER)</th>
+                                <th>Overall</th>
+                                <th>Key Moves</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var pokemon in GetVisibleRows(selectedSection))
+                            {
+                                <tr>
+                                    <td data-label="#">@pokemon.Rank</td>
+                                    <td data-label="Pok&eacute;mon">
+                                        <div class="tl-pokemon-cell">
+                                            <img class="tl-pokemon-sprite" src="@GetSpriteUrl(pokemon)" alt="@pokemon.Name sprite" loading="lazy" />
+                                            <span class="tl-pokemon-name">@pokemon.Name</span>
+                                        </div>
+                                    </td>
+                                    <td data-label="DPS (ER)">@pokemon.DPS?.ToString("0.0")</td>
+                                    <td data-label="TDO (ER)">@pokemon.TDO?.ToString("0")</td>
+                                    <td data-label="Overall">
+                                        <span class="tl-tier-badge @GetTierCssClass(pokemon.Score)">@GetTierLabel(pokemon.Score)</span>
+                                    </td>
+                                    <td data-label="Key Moves">
+                                        <div class="tl-key-moves">
+                                            @if (!string.IsNullOrWhiteSpace(pokemon.FastAttack))
+                                            {
+                                                <span class="tl-move-chip tl-move-chip-fast">@pokemon.FastAttack</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(pokemon.ChargedAttack))
+                                            {
+                                                <span class="tl-move-chip tl-move-chip-charged">@pokemon.ChargedAttack</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td data-label="Notes">@GetNotes(pokemon)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (GetTotalPages(selectedSection) > 1)
+                {
+                    var totalPages = GetTotalPages(selectedSection);
+                    var currentPage = GetCurrentPage(selectedSection.Label);
+                    <div class="tl-pagination d-flex justify-content-center align-items-center gap-2 mt-2">
+                        <button class="btn btn-outline-light btn-sm" disabled="@(currentPage <= 1)" @onclick="() => GoToPreviousPage(selectedSection.Label)">Prev</button>
+                        <span class="tl-pagination-label">Page @currentPage of @totalPages</span>
+                        <button class="btn btn-outline-light btn-sm" disabled="@(currentPage >= totalPages)" @onclick="() => GoToNextPage(selectedSection.Label, totalPages)">Next</button>
+                    </div>
                 }
             }
-        </div>
-    </div>
+        }
+    </section>
+
+    <aside class="tb-ai-sidebar">
+        <AiAgentPanel />
+    </aside>
 </div>
 
 @code {
@@ -100,6 +148,75 @@
         "steel", "fairy"
     ];
 
+    private static readonly Dictionary<string, (string Icon, string CssClass)> _typeMeta = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["normal"] = ("circle", "tb-type-normal"),
+        ["fire"] = ("flame", "tb-type-fire"),
+        ["water"] = ("droplet", "tb-type-water"),
+        ["electric"] = ("zap", "tb-type-electric"),
+        ["grass"] = ("leaf", "tb-type-grass"),
+        ["ice"] = ("snowflake", "tb-type-ice"),
+        ["fighting"] = ("fist", "tb-type-fighting"),
+        ["poison"] = ("skull-poison", "tb-type-poison"),
+        ["ground"] = ("mountain", "tb-type-ground"),
+        ["flying"] = ("wind", "tb-type-flying"),
+        ["psychic"] = ("brain", "tb-type-psychic"),
+        ["bug"] = ("bug", "tb-type-bug"),
+        ["rock"] = ("mountain", "tb-type-rock"),
+        ["ghost"] = ("ghost", "tb-type-ghost"),
+        ["dragon"] = ("sparkles", "tb-type-dragon"),
+        ["dark"] = ("moon", "tb-type-dark"),
+        ["steel"] = ("shield", "tb-type-steel"),
+        ["fairy"] = ("sparkles", "tb-type-fairy"),
+    };
+
+    private static (string Icon, string CssClass) GetTypeMeta(string attackerType)
+        => _typeMeta.TryGetValue(attackerType, out var meta) ? meta : ("circle", "tb-type-normal");
+
+    private static string CapitalizeLabel(string attackerType)
+        => attackerType.Length == 0 ? attackerType : char.ToUpperInvariant(attackerType[0]) + attackerType[1..];
+
+    private static string GetSpriteUrl(HubRankedPokemon pokemon)
+        => $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{pokemon.PokemonNumber ?? 0}.png";
+
+    private static string GetTierLabel(double? score)
+    {
+        return score switch
+        {
+            >= 95 => "S+",
+            >= 85 => "S",
+            >= 75 => "A+",
+            >= 65 => "A",
+            >= 50 => "B",
+            _ => "C",
+        };
+    }
+
+    private static string GetTierCssClass(double? score)
+    {
+        return score switch
+        {
+            >= 95 => "tl-tier-s-plus",
+            >= 85 => "tl-tier-s",
+            >= 75 => "tl-tier-a-plus",
+            >= 65 => "tl-tier-a",
+            >= 50 => "tl-tier-b",
+            _ => "tl-tier-c",
+        };
+    }
+
+    private static string GetNotes(HubRankedPokemon pokemon)
+    {
+        return pokemon.Score switch
+        {
+            >= 95 => "Top overall pick",
+            >= 85 => "Strong and accessible",
+            >= 75 => "High performance",
+            >= 65 => "Solid choice",
+            _ => "Usable in a pinch",
+        };
+    }
+
     private readonly List<HubTierRow> _allTierRows = [];
     private readonly Dictionary<string, int> _currentPageBySection = new(StringComparer.OrdinalIgnoreCase);
     private const int PageSize = 10;
@@ -107,6 +224,7 @@
     private string? _errorMessage;
     private string _progressMessage = "Idle";
     private int _progressPercent;
+    private string? _selectedAttackerType;
     private CancellationTokenSource? _loadCts;
 
     protected override async Task OnInitializedAsync()
@@ -141,6 +259,8 @@
                 cancellationToken);
 
             _allTierRows.AddRange(rows);
+            _selectedAttackerType ??= _attackerTypes.FirstOrDefault(type =>
+                _allTierRows.Any(x => string.Equals(x.AttackerType, type, StringComparison.OrdinalIgnoreCase)));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -177,7 +297,7 @@
 
             yield return new HubTierSection
             {
-                Label = char.ToUpperInvariant(attackerType[0]) + attackerType[1..],
+                Label = CapitalizeLabel(attackerType),
                 TierList = tierList
             };
         }
@@ -217,3 +337,4 @@
         }
     }
 }
+
