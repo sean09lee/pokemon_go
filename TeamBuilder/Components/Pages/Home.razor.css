@@ -476,6 +476,57 @@
     cursor: not-allowed;
 }
 
+.tb-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 11, 15, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    padding: 1rem;
+}
+
+.tb-modal-card {
+    background: #1b222c;
+    border: 1px solid #262f3a;
+    border-radius: 12px;
+    padding: 1.25rem;
+    max-width: 420px;
+    width: 100%;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.tb-modal-title {
+    margin: 0 0 0.5rem;
+    color: #e7edf5;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.tb-modal-body {
+    margin: 0 0 1rem;
+    color: #c3cedb;
+}
+
+.tb-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.tb-modal-danger {
+    background: #7a2230;
+    border-color: #9b2d3f;
+    color: #ffd9de;
+}
+
+.tb-modal-danger:hover {
+    background: #8f2838;
+}
+
 .tb-type-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -794,12 +845,41 @@
         justify-content: flex-start;
     }
 
+    .tb-toolbar-btn-text {
+        display: none;
+    }
+
+    .tb-toolbar-btn {
+        padding: 0.42rem 0.55rem;
+    }
+
     .pokedex-vents {
         display: none;
     }
 
     .tb-sidebar-footer {
         justify-content: flex-end;
+    }
+
+    .tb-modal-overlay {
+        padding: 0.75rem;
+    }
+
+    .tb-modal-card {
+        padding: 1rem;
+        max-width: none;
+    }
+
+    .tb-modal-title {
+        font-size: 1rem;
+    }
+
+    .tb-modal-body {
+        font-size: 0.9rem;
+    }
+
+    .tb-modal-actions {
+        flex-wrap: wrap;
     }
 }
 

@@ -26,6 +26,19 @@
 }
 
 <div class="tb-raid-page-shell @(_pokemon.Count > 0 ? "has-my-pokemon" : string.Empty)">
+	@if (_showResetConfirm)
+	{
+		<div class="tb-modal-overlay" @onclick="@(() => _showResetConfirm = false)">
+			<div class="tb-modal-card" @onclick:stopPropagation="true">
+				<h3 class="tb-modal-title">Are you sure you want to reset Pok&eacute;mon data?</h3>
+				<p class="tb-modal-body">This will clear all your uploaded Pok&eacute;mon. This action cannot be undone.</p>
+				<div class="tb-modal-actions">
+					<button type="button" class="tb-toolbar-btn" @onclick="@(() => _showResetConfirm = false)">Cancel</button>
+					<button type="button" class="tb-toolbar-btn tb-modal-danger" @onclick="ConfirmReset">Reset</button>
+				</div>
+			</div>
+		</div>
+	}
 	@if (_pokemon.Count > 0)
 	{
 		<div class="tb-my-pokemon-wrapper">
@@ -41,15 +54,20 @@
 					<span class="tb-status-text">@_pokemon.Count Pok&eacute;mon loaded</span>
 				</div>
 				<div class="tb-toolbar-actions">
-					<label for="reuploadCsvInput" class="tb-toolbar-btn @((_isLoading || _isTierLoading) ? "disabled" : string.Empty)">
-						<LucideIcon Name="file" Size="16" /> Reupload CSV
+					<button type="button" class="tb-toolbar-btn" @onclick="@(() => _showResetConfirm = true)" disabled="@(_isLoading || _isTierLoading)" title="Reset">
+						<LucideIcon Name="refresh-cw" Size="16" /> <span class="tb-toolbar-btn-text">Reset</span>
+					</button>
+					<label for="reuploadCsvInput" class="tb-toolbar-btn @((_isLoading || _isTierLoading) ? "disabled" : string.Empty)" title="Upload CSV">
+						<LucideIcon Name="file" Size="16" /> <span class="tb-toolbar-btn-text">Upload CSV</span>
 					</label>
 					<InputFile id="reuploadCsvInput" class="d-none" OnChange="OnCsvSelected" accept=".csv" disabled="@(_isLoading || _isTierLoading)" />
-					<button type="button" class="tb-toolbar-btn" @onclick="@(() => _showSettings = !_showSettings)">
-						<LucideIcon Name="settings" Size="16" /> Settings
+					<button type="button" class="tb-toolbar-btn" @onclick="@(() => _showSettings = !_showSettings)" title="Settings">
+						<LucideIcon Name="settings" Size="16" /> <span class="tb-toolbar-btn-text">Settings</span>
 					</button>
 				</div>
 			</div>
+
+			}
 
 			@if (_showSettings)
 			{
@@ -409,6 +427,7 @@
 	private CancellationTokenSource? _processingCts;
 	private int _dustLimit = 100000;
 	private bool _showSettings;
+	private bool _showResetConfirm;
 
 	private const string UploadSectionKey = "upload";
 	private const string RaidSectionPrefix = "raid:";
@@ -521,6 +540,50 @@
 			// unavailable during static prerendering) and fall back to the upload view.
 			return false;
 		}
+	}
+
+	private async Task ConfirmReset()
+	{
+		_showResetConfirm = false;
+		await ClearCurrentPokemon();
+	}
+
+	private async Task ClearCurrentPokemon()
+	{
+		try
+		{
+			foreach (var attackerType in _rankingResponse.RaidTeamsByType.Keys)
+			{
+				await JS.InvokeVoidAsync("localStorage.removeItem", LocalStorageRaidTypeKeyPrefix + attackerType);
+			}
+
+			await JS.InvokeVoidAsync("localStorage.removeItem", LocalStorageKey);
+		}
+		catch
+		{
+			// Local storage may be unavailable (e.g. private browsing); ignore failures.
+		}
+
+		_pokemon.Clear();
+		_validationFailures.Clear();
+		_allTierRows.Clear();
+		_candyByPokemonNumber.Clear();
+		_candyQuestions.Clear();
+		_rankingResponse = new RankingResponse();
+		_uploadedFileName = null;
+		_errorMessage = null;
+		_hubErrorMessage = null;
+		_tierProgressMessage = "Idle";
+		_tierProgressPercent = 0;
+		_tierProgressHalted = false;
+		_selectedRaidTeamType = null;
+		_selectedSidebarSection = UploadSectionKey;
+		_showSettings = false;
+		_hasRestoredFromStorage = false;
+
+		UploadState.Clear();
+
+		StateHasChanged();
 	}
 
 	private async Task SaveStateToLocalStorageAsync()

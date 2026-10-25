@@ -35,4 +35,12 @@ public class PokemonUploadState
         ValidationFailures = validationFailures;
         Changed?.Invoke();
     }
+
+    public void Clear()
+    {
+        HasUploadedPokemon = false;
+        Pokemon = [];
+        ValidationFailures = [];
+        Changed?.Invoke();
+    }
 }

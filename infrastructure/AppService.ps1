@@ -15,7 +15,7 @@ $plan = $names.Plan
 $webApp = $names.WebApp
 
 # Hardcoded desired state
-$desiredPlanSku = $Environment -eq 'prod' ? 'D1' : 'F1'
+$desiredPlanSku = $Environment -eq 'prod' ? 'B1' : 'F1'
 $desiredFramework = 'v10.0'
 $desiredWindowsRuntimeArg = 'dotnet:10'
 $desiredLinuxRuntime = 'DOTNETCORE|10.0'
