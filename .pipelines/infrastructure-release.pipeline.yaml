@@ -58,7 +58,7 @@ stages:
               failOnStandardError: false
 
           - task: AzureCLI@2
-            displayName: 'App Service (shared B1 plan + environment registry and app)'
+            displayName: 'App Service'
             inputs:
               azureSubscription: '$(azureSubscription)'
               scriptType: 'pscore'
@@ -102,7 +102,7 @@ stages:
               ADMIN_GROUP_OBJECT_ID: $(adminGroupObjectId)
 
           - task: AzureCLI@2
-            displayName: 'SQL Database (server + database)'
+            displayName: 'SQL Database'
             inputs:
               azureSubscription: '$(azureSubscription)'
               scriptType: 'pscore'
