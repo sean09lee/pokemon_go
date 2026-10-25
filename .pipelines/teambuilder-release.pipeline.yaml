@@ -90,8 +90,8 @@ stages:
 
                 $driverPath = Join-Path $extractPath '.playwright/node/win32_x64/node.exe'
                 $browserPath = Join-Path $extractPath '.playwright/package/.local-browsers'
-                if (-not (Test-Path $driverPath) -or -not (Get-ChildItem -Path $browserPath -Filter 'chrome.exe' -Recurse -File)) {
-                  throw 'The artifact is missing the Playwright Windows driver or Chromium. Deploy a build that packages Playwright.'
+                if (-not (Test-Path $driverPath) -or -not (Get-ChildItem -Path $browserPath -Filter 'headless_shell.exe' -Recurse -File)) {
+                  throw 'The artifact is missing the Playwright Windows driver or Chromium headless shell. Deploy a build that packages Playwright.'
                 }
 
                 $appSettingsPath = Join-Path $extractPath 'appsettings.json'
