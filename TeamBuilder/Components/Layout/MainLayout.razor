@@ -70,7 +70,7 @@
 </div>
 
 @code {
-    private string _appTitle = "Pokémon Go Team Builder";
+    private string _appTitle = "Pokémon Roster";
     private bool _mobileMenuOpen;
 
     protected override void OnInitialized()
@@ -108,7 +108,7 @@
         _appTitle = relative switch
         {
             _ when string.Equals(relative, "iv-lookup", StringComparison.OrdinalIgnoreCase) => "IV Rank Checker",
-            _ => "Pokémon Go Team Builder"
+            _ => "Pokémon Roster"
         };
     }
 
