@@ -18,8 +18,6 @@ var app = builder.Build();
 
 app.AddHttpPipeline();
 
-builder.AddStaticImages(app);
-
 app.UseAntiforgery();
 
 app.MapStaticAssets();
