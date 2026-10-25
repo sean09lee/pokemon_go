@@ -143,6 +143,9 @@
 
 .tb-settings-btn {
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     border: 1px solid #262f3a;
     background: #1b222c;
     color: #c3cedb;
