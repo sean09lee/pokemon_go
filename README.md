@@ -1,6 +1,6 @@
 # Pokemon GO Team Builder
 
-Blazor web app that helps you build raid teams from your own Pokémon collection.
+Blazor web app that helps you build raid teams from your own Pokémon collection. This site is available at https://pokemonroster.com.
 
 ## What this site does
 
@@ -57,6 +57,12 @@ Default local URLs (from launch settings):
 2. Open the app and click **Upload CSV**.
 3. Wait for tier-list crawling and ranking to complete.
 4. Expand the result sections to inspect your teams.
+
+## Pipelines
+
+- [![Build Status](https://sean09lee.visualstudio.com/Team%20Builder/_apis/build/status%2FBuilds%2FTeamBuilder-Build?branchName=main)](https://sean09lee.visualstudio.com/Team%20Builder/_build/latest?definitionId=18&branchName=main)
+- [![Release Status](https://sean09lee.visualstudio.com/Team%20Builder/_apis/build/status%2FReleases%2FTeamBuilder-Release?branchName=main)](https://sean09lee.visualstudio.com/Team%20Builder/_build/latest?definitionId=19&branchName=main)
+- [![Infrastructure Status](https://sean09lee.visualstudio.com/Team%20Builder/_apis/build/status%2FInfrastructure%2FTeamBuilder-Infrastructure?branchName=main)](https://sean09lee.visualstudio.com/Team%20Builder/_build/latest?definitionId=17&branchName=main)
 
 ## Notes
 

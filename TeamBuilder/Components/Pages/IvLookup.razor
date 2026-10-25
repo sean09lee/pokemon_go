@@ -1,10 +1,11 @@
 @page "/iv-lookup"
+@using TeamBuilder.Components.Shared
 @using TeamBuilder.Data.Models
 @using TeamBuilder.Services.Services
 @using TeamBuilder.Services.Contracts
 @inject IPogoApiService PogoApiService
 
-<PageTitle>IV Lookup</PageTitle>
+<PageTitle>IV Rank Checker</PageTitle>
 
 <div class="iv-main">
 	<div class="tb-eyebrow-row">
@@ -26,7 +27,7 @@
 			   @onkeydown="HandlePokemonSearchKeyDown"
 			   disabled="@_isLoading" />
 
-		@if (_isLoading)
+		@if (_showLoadingIndicator)
 		{
 			<small class="text-muted d-block mt-2">Loading Pokémon stats...</small>
 		}
@@ -227,7 +228,7 @@
 	[
 		new LeagueOption(500, "Little League (CP ≤ 500)", "/assets/images/little_league_logo.png"),
 		new LeagueOption(1500, "Great League (CP ≤ 1500)", "/assets/images/great_league_logo.png"),
-		new LeagueOption(2500, "Ultra League (CP ≤ 2500)", "/assets/images/ultimate_league_logo.jpg"),
+		new LeagueOption(2500, "Ultra League (CP ≤ 2500)", "/assets/images/ultimate_league_logo.png"),
 		new LeagueOption(0, "Master League (No CP cap)", "/assets/images/master_league_logo.png")
 	];
 
@@ -246,6 +247,8 @@
 	private const int PageSize = 10;
 	private int _currentPage = 1;
 	private bool _isLoading;
+	private bool _showLoadingIndicator;
+	private CancellationTokenSource? _loadingIndicatorCts;
 	private bool _leagueMenuOpen;
 	private int _leagueKeyboardIndex = -1;
 	private int _searchKeyboardIndex = -1;
@@ -277,6 +280,8 @@
 	protected override async Task OnInitializedAsync()
 	{
 		_isLoading = true;
+		_loadingIndicatorCts = new CancellationTokenSource();
+		_ = ShowLoadingIndicatorAfterDelayAsync(_loadingIndicatorCts.Token);
 		try
 		{
 			var stats = await PogoApiService.GetPokemonStatsDataAsync();
@@ -310,6 +315,27 @@
 		finally
 		{
 			_isLoading = false;
+			_showLoadingIndicator = false;
+			_loadingIndicatorCts?.Cancel();
+			_loadingIndicatorCts?.Dispose();
+			_loadingIndicatorCts = null;
+		}
+	}
+
+	private async Task ShowLoadingIndicatorAfterDelayAsync(CancellationToken cancellationToken)
+	{
+		try
+		{
+			await Task.Delay(250, cancellationToken);
+			if (!cancellationToken.IsCancellationRequested && _isLoading)
+			{
+				_showLoadingIndicator = true;
+				StateHasChanged();
+			}
+		}
+		catch (TaskCanceledException)
+		{
+			// Loading finished before the delay elapsed; nothing to do.
 		}
 	}
 
