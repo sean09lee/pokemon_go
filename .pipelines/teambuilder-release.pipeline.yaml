@@ -114,5 +114,5 @@ stages:
               appName: '$(webAppName)'
               resourceGroupName: '$(resourceGroup)'
               package: '$(Pipeline.Workspace)/build/$(artifactName)/**/*.zip'
-              deploymentMethod: 'zipDeploy'
+              deploymentMethod: 'runFromPackage'
               appSettings: '-PLAYWRIGHT_BROWSERS_PATH 0'
