@@ -305,7 +305,59 @@ public static class IndividualValueService
 
         return -1;
     }
+
+    /// <summary>
+    /// Flattens a <see cref="CalculationResult"/>'s sorted ranks into ordered, percentile-annotated rows
+    /// suitable for direct display.
+    /// </summary>
+    public static List<IvRankRow> BuildRankRows(CalculationResult result)
+    {
+        var rows = new List<IvRankRow>();
+        var rank = 1;
+        var denominator = Math.Max(1, result.NumRanks - 1);
+
+        foreach (var (_, bucket) in result.SortedRanks)
+        {
+            foreach (var entry in bucket)
+            {
+                var percentile = result.NumRanks <= 1
+                    ? 100d
+                    : (1d - ((rank - 1d) / denominator)) * 100d;
+
+                rows.Add(new IvRankRow(
+                    rank,
+                    entry.IVs.A,
+                    entry.IVs.D,
+                    entry.IVs.S,
+                    entry.L,
+                    entry.CP,
+                    entry.Battle.A,
+                    entry.Battle.D,
+                    entry.Battle.S,
+                    (int)Math.Round(entry.Battle.A * entry.Battle.D * entry.Battle.S),
+                    percentile));
+
+                rank++;
+            }
+        }
+
+        return rows;
+    }
 }
+
+public sealed record IvRankRow(
+    int Rank,
+    int AtkIv,
+    int DefIv,
+    int StaIv,
+    double Level,
+    int Cp,
+    double AtkStat,
+    double DefStat,
+    int Hp,
+    int StatProduct,
+    double Percentile);
+
 
 public sealed record IvStats(int A, int D, int S, string Star);
 public sealed record BattleStats(double A, double D, int S);
