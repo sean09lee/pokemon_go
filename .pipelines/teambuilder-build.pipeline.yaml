@@ -62,10 +62,38 @@ steps:
     publishWebProjects: false
     projects: '$(webProjectPath)'
     arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/app'
-    zipAfterPublish: true
+    zipAfterPublish: false
+    modifyOutputPath: false
+
+- task: PowerShell@2
+  displayName: 'Install and package Playwright Chromium'
+  inputs:
+    pwsh: true
+    targetType: 'inline'
+    script: |
+      $ErrorActionPreference = 'Stop'
+      $publishPath = '$(Build.ArtifactStagingDirectory)/app'
+      $driverPath = Join-Path $publishPath '.playwright/node/win32_x64/node.exe'
+      if (-not (Test-Path $driverPath)) {
+          throw "Playwright's Windows driver was not published at '$driverPath'."
+      }
+
+      & (Join-Path $publishPath 'playwright.ps1') install chromium
+      if ($LASTEXITCODE -ne 0) {
+          throw 'Failed to install Playwright Chromium.'
+      }
+
+      $browserPath = Join-Path $publishPath '.playwright/package/.local-browsers'
+      if (-not (Get-ChildItem -Path $browserPath -Filter 'chrome.exe' -Recurse -File)) {
+          throw "Playwright Chromium was not installed under '$browserPath'."
+      }
+
+      [System.IO.Compression.ZipFile]::CreateFromDirectory($publishPath, '$(Build.ArtifactStagingDirectory)/teambuilder.zip')
+  env:
+    PLAYWRIGHT_BROWSERS_PATH: '0'
 
 - task: PublishPipelineArtifact@1
   displayName: 'Publish Artifact'
   inputs:
-    targetPath: '$(Build.ArtifactStagingDirectory)/app'
+    targetPath: '$(Build.ArtifactStagingDirectory)/teambuilder.zip'
     artifactName: '$(artifactName)'
