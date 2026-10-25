@@ -69,3 +69,22 @@
     height: 1px;
     background: #262f3a;
 }
+
+.mp-desktop-notice {
+    display: none;
+}
+
+/* The My Pokemon page is only intended for mobile view; the desktop experience
+   surfaces the same list via the My Pokemon section on the Raid Builder page. */
+@media (min-width: 901px) {
+    .mp-main {
+        display: none;
+    }
+
+    .mp-desktop-notice {
+        display: block;
+        padding: 1.5rem;
+        text-align: center;
+        color: #9eb2c8;
+    }
+}

@@ -223,21 +223,6 @@
 		public required int BaseStamina { get; init; }
 	}
 
-	private sealed class IvRankRow
-	{
-		public required int Rank { get; init; }
-		public required int AtkIv { get; init; }
-		public required int DefIv { get; init; }
-		public required int StaIv { get; init; }
-		public required double Level { get; init; }
-		public required int Cp { get; init; }
-		public required double AtkStat { get; init; }
-		public required double DefStat { get; init; }
-		public required int Hp { get; init; }
-		public required int StatProduct { get; init; }
-		public required double Percentile { get; init; }
-	}
-
 	private static readonly LeagueOption[] _leagues =
 	[
 		new LeagueOption(500, "Little League (CP ≤ 500)", "/assets/images/little_league_logo.png"),
@@ -382,35 +367,7 @@
 			false);
 
 		_rows.Clear();
-		var rank = 1;
-		var denominator = Math.Max(1, result.NumRanks - 1);
-
-		foreach (var (_, bucket) in result.SortedRanks)
-		{
-			foreach (var entry in bucket)
-			{
-				var percentile = result.NumRanks <= 1
-					? 100d
-					: (1d - ((rank - 1d) / denominator)) * 100d;
-
-				_rows.Add(new IvRankRow
-				{
-					Rank = rank,
-					AtkIv = entry.IVs.A,
-					DefIv = entry.IVs.D,
-					StaIv = entry.IVs.S,
-					Level = entry.L,
-					Cp = entry.CP,
-					AtkStat = entry.Battle.A,
-					DefStat = entry.Battle.D,
-					Hp = entry.Battle.S,
-					StatProduct = (int)Math.Round(entry.Battle.A * entry.Battle.D * entry.Battle.S),
-					Percentile = percentile
-				});
-
-				rank++;
-			}
-		}
+		_rows.AddRange(IndividualValueService.BuildRankRows(result));
 
 		_currentPage = 1;
 	}

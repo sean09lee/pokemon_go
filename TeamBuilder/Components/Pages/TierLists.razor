@@ -1,7 +1,7 @@
 @page "/tier-lists"
 @using TeamBuilder.Data.Models
 @using TeamBuilder.Services.Contracts
-@inject IHubApiService HubApiService
+@inject IHubTierListService HubTierListService
 
 <PageTitle>Tier Lists</PageTitle>
 
@@ -130,32 +130,17 @@
 
         try
         {
-            for (var i = 0; i < _attackerTypes.Length; i++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var attackerType = _attackerTypes[i];
-                _progressMessage = $"Processing '{attackerType}' tier list ({i + 1}/{_attackerTypes.Length})...";
-                StateHasChanged();
-
-                using var perTypeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                perTypeCts.CancelAfter(TimeSpan.FromSeconds(120));
-
-                var tierList = await HubApiService.CrawlBestPerTypeAsync(attackerType, 200, perTypeCts.Token);
-                AddTierRows(attackerType, tierList);
-
-                _progressPercent = (int)Math.Round(((i + 1d) / _attackerTypes.Length) * 100d);
-            }
-
-            _allTierRows.Sort((a, b) =>
-            {
-                var typeCompare = string.Compare(a.AttackerType, b.AttackerType, StringComparison.OrdinalIgnoreCase);
-                if (typeCompare != 0)
+            var (_, rows) = await HubTierListService.CrawlAllTypesAsync(
+                200,
+                async (attackerType, processed, total) =>
                 {
-                    return typeCompare;
-                }
+                    _progressMessage = $"Processing '{attackerType}' tier list ({processed}/{total})...";
+                    _progressPercent = (int)Math.Round((processed / (double)total) * 100d);
+                    StateHasChanged();
+                },
+                cancellationToken);
 
-                return (a.Pokemon.Rank ?? int.MaxValue).CompareTo(b.Pokemon.Rank ?? int.MaxValue);
-            });
+            _allTierRows.AddRange(rows);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -173,18 +158,6 @@
         {
             _isLoading = false;
             StateHasChanged();
-        }
-    }
-
-    private void AddTierRows(string attackerType, IEnumerable<HubRankedPokemon> tierList)
-    {
-        foreach (var pokemon in tierList)
-        {
-            _allTierRows.Add(new HubTierRow
-            {
-                AttackerType = attackerType,
-                Pokemon = pokemon
-            });
         }
     }
 

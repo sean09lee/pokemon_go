@@ -6,6 +6,7 @@
 @using TeamBuilder.Data.Responses
 @inject CsvParserService CsvParserService
 @inject IHubApiService HubApiService
+@inject IHubTierListService HubTierListService
 @inject IRankingService RankingService
 @inject PokemonUploadState UploadState
 @inject IJSRuntime JS
@@ -24,7 +25,13 @@
 		: default;
 }
 
-<div class="tb-raid-page-shell">
+<div class="tb-raid-page-shell @(_pokemon.Count > 0 ? "has-my-pokemon" : string.Empty)">
+	@if (_pokemon.Count > 0)
+	{
+		<div class="tb-my-pokemon-wrapper">
+			<MyPokemonSection Pokemon="_pokemon" />
+		</div>
+	}
 	<section class="tb-raid-main">
 		@if (ShowRaidSidebar)
 		{
@@ -573,60 +580,23 @@
 			_allTierRows.Clear();
 			await InvokeAsync(StateHasChanged);
 
-			var tierMap = new Dictionary<string, IList<HubRankedPokemon>>(StringComparer.OrdinalIgnoreCase);
+			var (response, rows) = await HubTierListService.CrawlAllTypesAsync(
+				200,
+				async (attackerType, processed, total) =>
+				{
+					_tierProgressMessage = $"Processing '{attackerType}' tier list ({processed}/{total})...";
+					_tierProgressPercent = (int)Math.Round((processed / (double)total) * 60d);
+					await InvokeAsync(StateHasChanged);
+				},
+				cancellationToken);
 
-			for (var i = 0; i < _attackerTypes.Length; i++)
-			{
-				cancellationToken.ThrowIfCancellationRequested();
-				var attackerType = _attackerTypes[i];
-				_tierProgressMessage = $"Processing '{attackerType}' tier list ({i + 1}/{_attackerTypes.Length})...";
-				await InvokeAsync(StateHasChanged);
-
-				using var perTypeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-				perTypeCts.CancelAfter(TimeSpan.FromSeconds(120));
-
-				var tierList = await HubApiService.CrawlBestPerTypeAsync(attackerType, 200, perTypeCts.Token);
-				tierMap[attackerType] = tierList;
-				AddTierRows(attackerType, tierList);
-
-				_tierProgressPercent = (int)Math.Round(((i + 1d) / _attackerTypes.Length) * 60d);
-			}
+			_allTierRows.Clear();
+			_allTierRows.AddRange(rows);
 
 			_tierProgressPercent = 60;
 			_tierProgressMessage = "Tier lists loaded. Building raid teams...";
 
-			_allTierRows.Sort((a, b) =>
-			{
-				var typeCompare = string.Compare(a.AttackerType, b.AttackerType, StringComparison.OrdinalIgnoreCase);
-				if (typeCompare != 0)
-				{
-					return typeCompare;
-				}
-
-				return (a.Pokemon.Rank ?? int.MaxValue).CompareTo(b.Pokemon.Rank ?? int.MaxValue);
-			});
-
-			return new HubRankingResponse
-			{
-				NormalTierList = tierMap.GetValueOrDefault("normal") ?? [],
-				FireTierList = tierMap.GetValueOrDefault("fire") ?? [],
-				WaterTierList = tierMap.GetValueOrDefault("water") ?? [],
-				ElectricTierList = tierMap.GetValueOrDefault("electric") ?? [],
-				GrassTierList = tierMap.GetValueOrDefault("grass") ?? [],
-				IceTierList = tierMap.GetValueOrDefault("ice") ?? [],
-				FightingTierList = tierMap.GetValueOrDefault("fighting") ?? [],
-				PoisonTierList = tierMap.GetValueOrDefault("poison") ?? [],
-				GroundTierList = tierMap.GetValueOrDefault("ground") ?? [],
-				FlyingTierList = tierMap.GetValueOrDefault("flying") ?? [],
-				PsychicTierList = tierMap.GetValueOrDefault("psychic") ?? [],
-				BugTierList = tierMap.GetValueOrDefault("bug") ?? [],
-				RockTierList = tierMap.GetValueOrDefault("rock") ?? [],
-				GhostTierList = tierMap.GetValueOrDefault("ghost") ?? [],
-				DragonTierList = tierMap.GetValueOrDefault("dragon") ?? [],
-				DarkTierList = tierMap.GetValueOrDefault("dark") ?? [],
-				SteelTierList = tierMap.GetValueOrDefault("steel") ?? [],
-				FairyTierList = tierMap.GetValueOrDefault("fairy") ?? []
-			};
+			return response;
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -649,18 +619,6 @@
 		finally
 		{
 			// keep spinner active through raid-team generation
-		}
-	}
-
-	private void AddTierRows(string attackerType, IEnumerable<HubRankedPokemon> tierList)
-	{
-		foreach (var pokemon in tierList)
-		{
-			_allTierRows.Add(new HubTierRow
-			{
-				AttackerType = attackerType,
-				Pokemon = pokemon
-			});
 		}
 	}
 
@@ -903,38 +861,7 @@
 
 	private HubRankingResponse? BuildHubRankingResponseFromCachedRows()
 	{
-		if (_allTierRows.Count == 0)
-		{
-			return null;
-		}
-
-		IList<HubRankedPokemon> ForType(string typeKey)
-			=> _allTierRows
-				.Where(x => string.Equals(x.AttackerType, typeKey, StringComparison.OrdinalIgnoreCase))
-				.Select(x => x.Pokemon)
-				.ToList();
-
-		return new HubRankingResponse
-		{
-			NormalTierList = ForType("normal"),
-			FireTierList = ForType("fire"),
-			WaterTierList = ForType("water"),
-			ElectricTierList = ForType("electric"),
-			GrassTierList = ForType("grass"),
-			IceTierList = ForType("ice"),
-			FightingTierList = ForType("fighting"),
-			PoisonTierList = ForType("poison"),
-			GroundTierList = ForType("ground"),
-			FlyingTierList = ForType("flying"),
-			PsychicTierList = ForType("psychic"),
-			BugTierList = ForType("bug"),
-			RockTierList = ForType("rock"),
-			GhostTierList = ForType("ghost"),
-			DragonTierList = ForType("dragon"),
-			DarkTierList = ForType("dark"),
-			SteelTierList = ForType("steel"),
-			FairyTierList = ForType("fairy")
-		};
+		return HubTierListService.BuildFromCachedRows(_allTierRows);
 	}
 
 	private async Task ReportRankingProgressAsync(string stageMessage, int rankingPercent)

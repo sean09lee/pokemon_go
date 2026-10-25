@@ -1,0 +1,140 @@
+@using TeamBuilder.Data.Models
+
+<aside class="mp-sidebar">
+    <div class="mp-sidebar-header">
+        <span class="mp-sidebar-title">MY POKÉMON</span>
+        <span class="mp-sidebar-count">@Pokemon.Count</span>
+    </div>
+
+    <div class="mp-sidebar-search">
+        <LucideIcon Name="search" Size="14" />
+        <input type="text" placeholder="Search Pokémon..." @bind="_search" @bind:event="oninput" />
+    </div>
+
+    <select class="mp-sidebar-sort" @bind="_sort">
+        <option value="cp-desc">CP (High to Low)</option>
+        <option value="cp-asc">CP (Low to High)</option>
+        <option value="iv-desc">IV Avg (High to Low)</option>
+        <option value="name-asc">Name (A to Z)</option>
+    </select>
+
+    <div class="mp-sidebar-list">
+        @foreach (var p in GetPagedPokemon())
+        {
+            <div class="mp-sidebar-card">
+                <img class="mp-sidebar-sprite" src="@GetSpriteUrl(p)" alt="@(p.Name) sprite" loading="lazy" />
+                <div class="mp-sidebar-card-info">
+                    <span class="mp-sidebar-card-name">@p.Name</span>
+                    <span class="mp-sidebar-card-cp">CP @p.CP</span>
+                </div>
+                <div class="mp-sidebar-card-ivs">
+                    <span>@p.AtkIV</span>
+                    <span>@p.DefIV</span>
+                    <span>@p.StaIV</span>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (TotalPages > 1)
+    {
+        <div class="mp-sidebar-pagination">
+            @if (_page > 1)
+            {
+                <button type="button" class="mp-sidebar-page-btn" @onclick="GoToPreviousPage">
+                    <LucideIcon Name="chevron-left" Size="14" />
+                </button>
+            }
+            else
+            {
+                <span class="mp-sidebar-page-btn-spacer"></span>
+            }
+            <span class="mp-sidebar-page-label">Page @_page of @TotalPages</span>
+            @if (_page < TotalPages)
+            {
+                <button type="button" class="mp-sidebar-page-btn" @onclick="GoToNextPage">
+                    <LucideIcon Name="chevron-right" Size="14" />
+                </button>
+            }
+            else
+            {
+                <span class="mp-sidebar-page-btn-spacer"></span>
+            }
+        </div>
+    }
+</aside>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<Pokemon> Pokemon { get; set; } = [];
+
+    private const int PageSize = 20;
+
+    private string _search = string.Empty;
+    private string _sort = "cp-desc";
+    private int _page = 1;
+
+    private string? _lastSearch;
+    private string? _lastSort;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(GetFilteredPokemon().Count() / (double)PageSize));
+
+    private void GoToPreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void GoToNextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private IEnumerable<Pokemon> GetPagedPokemon()
+    {
+        // Resetting the page when the search/sort changes between renders (rather than
+        // only on parameter changes) keeps pagination in sync with user input.
+        if (_search != _lastSearch || _sort != _lastSort)
+        {
+            _page = 1;
+            _lastSearch = _search;
+            _lastSort = _sort;
+        }
+
+        return GetFilteredPokemon()
+            .Skip((_page - 1) * PageSize)
+            .Take(PageSize);
+    }
+
+    private IEnumerable<Pokemon> GetFilteredPokemon()
+    {
+        IEnumerable<Pokemon> query = Pokemon;
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            query = query.Where(p => p.Name is not null
+                && p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        query = _sort switch
+        {
+            "cp-asc" => query.OrderBy(p => p.CP ?? 0),
+            "iv-desc" => query.OrderByDescending(p => p.IvAvg ?? 0),
+            "name-asc" => query.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase),
+            _ => query.OrderByDescending(p => p.CP ?? 0),
+        };
+
+        return query;
+    }
+
+    private static string GetSpriteUrl(Pokemon pokemon)
+    {
+        var pokemonId = pokemon.PokemonNumber ?? 0;
+        return $"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{pokemonId}.png";
+    }
+}

@@ -35,6 +35,7 @@ public static class ServiceRegistration
         services.AddScoped<CsvParserService>();
         services.AddScoped<IRankingService, RankingService>();
         services.AddScoped<IHubApiService, HubApiService>();
+        services.AddScoped<IHubTierListService, HubTierListService>();
         services.AddScoped<IPogoApiService, PogoApiService>();
         services.AddScoped<PokemonUploadState>();
 

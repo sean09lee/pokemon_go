@@ -1,9 +1,14 @@
 @page "/my-pokemon"
 @using TeamBuilder.Data.Models
 @using TeamBuilder.Data.Responses
+@using TeamBuilder.Components.Shared
 @inject PokemonUploadState UploadState
 
 <PageTitle>My Pokemon</PageTitle>
+
+<div class="mp-desktop-notice">
+    View your Pok&eacute;mon list from the My Pok&eacute;mon section on the Raid Builder page.
+</div>
 
 <div class="mp-main">
     <div class="tb-eyebrow-row">
@@ -67,44 +72,7 @@
                 }
                 else
                 {
-                    <details class="mb-3" open>
-                        <summary class="fw-semibold">Uploaded Pokémon (@UploadState.Pokemon.Count)</summary>
-                        <div class="table-responsive mt-2">
-                            <table class="table table-striped table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Index</th>
-                                        <th>#</th>
-                                        <th>Name</th>
-                                        <th>Form</th>
-                                        <th>Gender</th>
-                                        <th>CP</th>
-                                        <th>HP</th>
-                                        <th>Atk/Def/Sta IV</th>
-                                        <th>Quick Move</th>
-                                        <th>Charge Move</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var p in UploadState.Pokemon)
-                                    {
-                                        <tr>
-                                            <td>@p.Index</td>
-                                            <td>@p.PokemonNumber</td>
-                                            <td>@p.Name</td>
-                                            <td>@p.Form</td>
-                                            <td>@p.Gender</td>
-                                            <td>@p.CP</td>
-                                            <td>@p.HP</td>
-                                            <td>@($"{p.AtkIV}/{p.DefIV}/{p.StaIV}")</td>
-                                            <td>@p.QuickMove</td>
-                                            <td>@p.ChargeMove</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </details>
+                    <MyPokemonSection Pokemon="UploadState.Pokemon" />
                 }
             }
         </div>
