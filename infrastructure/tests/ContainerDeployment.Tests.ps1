@@ -66,6 +66,11 @@ function az {
     $global:LASTEXITCODE = 0
     switch -Regex ($command) {
         '^account show ' { return '00000000-0000-0000-0000-000000000000' }
+        '^provider show --namespace Microsoft.ContainerRegistry ' {
+            if ($global:ContainerTestExisting) { return 'Registered' }
+            return 'NotRegistered'
+        }
+        '^provider register --namespace Microsoft.ContainerRegistry --wait$' { return }
         '^group show ' {
             if ($global:ContainerTestExisting) { return '{"name":"shared"}' }
             $global:LASTEXITCODE = 1
@@ -100,6 +105,11 @@ function az {
 
 try {
     & "$repoRoot/infrastructure/AppService.ps1" -Environment dev
+    $registrationIndex = $global:ContainerTestCommands.IndexOf('provider register --namespace Microsoft.ContainerRegistry --wait')
+    $registryCreation = $global:ContainerTestCommands | Where-Object { $_ -match '^acr create ' } | Select-Object -First 1
+    if ($registrationIndex -lt 0 -or $registrationIndex -ge $global:ContainerTestCommands.IndexOf($registryCreation)) {
+        throw 'The registry provider was not registered and awaited before registry creation.'
+    }
     if (-not ($global:ContainerTestCommands | Where-Object { $_ -match '^appservice plan create .*--sku B1 --is-linux' }) -or
         -not ($global:ContainerTestCommands | Where-Object { $_ -match '^acr create .*--admin-enabled false' }) -or
         -not ($global:ContainerTestCommands | Where-Object { $_ -match 'properties.acrUseManagedIdentityCreds=true' })) {
@@ -115,8 +125,8 @@ try {
     $global:ContainerTestExisting = $true
     $global:ContainerTestAppsExist = $true
     & "$repoRoot/infrastructure/AppService.ps1" -Environment dev
-    if ($global:ContainerTestCommands | Where-Object { $_ -match '^(acr create|appservice plan create|webapp create) |--linux-fx-version|--runtime' }) {
-        throw 'Infrastructure rerun recreated resources or overwrote the deployed container.'
+    if ($global:ContainerTestCommands | Where-Object { $_ -match '^(provider register|acr create|appservice plan create|webapp create) |--linux-fx-version|--runtime' }) {
+        throw 'Infrastructure rerun registered an existing provider, recreated resources, or overwrote the deployed container.'
     }
 
     $global:ContainerTestCommands.Clear()

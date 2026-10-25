@@ -40,6 +40,16 @@ if ($null -eq $sharedGroup) {
     if ($LASTEXITCODE -ne 0) { throw "Failed to create shared hosting resource group '$planRg'." }
 }
 
+$registryProvider = 'Microsoft.ContainerRegistry'
+$registrationState = az provider show --namespace $registryProvider --query registrationState -o tsv 2>$null
+if ($LASTEXITCODE -ne 0 -or $registrationState -ne 'Registered') {
+    Write-Host "Registering resource provider '$registryProvider'..."
+    az provider register --namespace $registryProvider --wait | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to register '$registryProvider'. The service connection needs Microsoft.ContainerRegistry/register/action at subscription scope, or a subscription administrator must run: az provider register --namespace $registryProvider --wait"
+    }
+}
+
 $existingRegistry = Get-AzResourceOrNull "az acr show --name $registry --resource-group $rg"
 if ($null -eq $existingRegistry) {
     az acr create --name $registry --resource-group $rg --location $names.Location --sku Basic --admin-enabled false --role-assignment-mode rbac --tags $script:TagArguments | Out-Null
