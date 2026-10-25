@@ -11,6 +11,9 @@
 #   3. A secret pipeline variable named 'adminGroupObjectId' must be defined on this
 #      pipeline (object id of the Entra group that gets data-plane admin access to
 #      Key Vault and App Configuration).
+#   4. Hosting uses one shared paid Linux B1 plan and an ACR Basic per environment.
+#      Existing Windows apps must be explicitly removed before migration; scripts
+#      never delete them or retire old environment-specific plans automatically.
 parameters:
 - name: environment
   displayName: 'Environment'
@@ -55,7 +58,7 @@ stages:
               failOnStandardError: false
 
           - task: AzureCLI@2
-            displayName: 'App Service (plan + web app)'
+            displayName: 'App Service (shared B1 plan + environment registry and app)'
             inputs:
               azureSubscription: '$(azureSubscription)'
               scriptType: 'pscore'

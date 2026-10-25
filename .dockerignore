@@ -1,0 +1,13 @@
+**/bin
+**/obj
+**/TestResults
+.git
+.vs
+.vscode
+.azure
+.pipelines
+infrastructure
+**/*.user
+**/appsettings.Development.json
+**/Properties/PublishProfiles
+**/node_modules

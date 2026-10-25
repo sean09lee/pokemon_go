@@ -17,6 +17,7 @@ $names = Get-InfraNames -Environment $Environment
 $rg = $names.ResourceGroup
 $server = $names.SqlServer
 $database = $names.SqlDatabase
+$firewallRule = $names.SqlFirewallRule
 $adminUser = $names.SqlAdminUser
 
 # SQL admin login naming rules are stricter than many Azure resource names.
@@ -91,16 +92,16 @@ else {
 }
 
 # --- Firewall rule: allow Azure services (web app) to reach the server ---
-Write-Host "Checking firewall rule 'AllowAzureServices'..."
-$existingRule = Get-AzResourceOrNull "az sql server firewall-rule show --name AllowAzureServices --server $server --resource-group $rg"
+Write-Host "Checking firewall rule '$firewallRule'..."
+$existingRule = Get-AzResourceOrNull "az sql server firewall-rule show --name $firewallRule --server $server --resource-group $rg"
 if ($null -eq $existingRule) {
-    Write-Host "Firewall rule 'AllowAzureServices' does not exist. Creating..."
-    az sql server firewall-rule create --name AllowAzureServices --server $server --resource-group $rg --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 | Out-Null
+    Write-Host "Firewall rule '$firewallRule' does not exist. Creating..."
+    az sql server firewall-rule create --name $firewallRule --server $server --resource-group $rg --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to create firewall rule on SQL server '$server'." }
-    Write-Host "Created firewall rule 'AllowAzureServices'."
+    Write-Host "Created firewall rule '$firewallRule'."
 }
 else {
-    Write-Host "Firewall rule 'AllowAzureServices' already exists."
+    Write-Host "Firewall rule '$firewallRule' already exists."
 }
 
 # --- SQL database ---

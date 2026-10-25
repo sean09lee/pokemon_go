@@ -72,7 +72,7 @@ else {
 # (verified via 'az cognitiveservices account list-models' - the subscription has
 # no OpenAI-format models enabled). GlobalStandard bills per token, so the
 # capacity only sets the throughput limit, never the price.
-$desiredDeployment = 'Ministral-3B'
+$desiredDeployment = $names.AiDeployment
 $desiredModelName = 'Ministral-3B'
 $desiredModelVersion = '1'
 $desiredModelFormat = 'Mistral AI'

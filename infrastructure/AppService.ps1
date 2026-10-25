@@ -1,4 +1,4 @@
-# Creates/updates the App Service plan and the Blazor web app.
+# Creates/updates Linux container hosting without replacing existing Windows resources.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
@@ -11,30 +11,46 @@ $ErrorActionPreference = 'Stop'
 
 $names = Get-InfraNames -Environment $Environment
 $rg = $names.ResourceGroup
+$planRg = $names.PlanResourceGroup
 $plan = $names.Plan
 $webApp = $names.WebApp
+$registry = $names.Registry
 
 # Hardcoded desired state
-$desiredPlanSku = $Environment -eq 'prod' ? 'D1' : 'F1'
-$desiredFramework = 'v10.0'
-$desiredWindowsRuntimeArg = 'dotnet:10'
-$desiredLinuxRuntime = 'DOTNETCORE|10.0'
-$desiredLinuxRuntimeArg = '"DOTNETCORE|10.0"'
+$desiredPlanSku = 'B1'
 $desiredMinTls = '1.2'
 
 # --- App Service plan ---
 Write-Host "Checking App Service plan '$plan'..."
-$existingPlan = Get-AzResourceOrNull "az appservice plan show --name $plan --resource-group $rg"
+$existingPlan = Get-AzResourceOrNull "az appservice plan show --name $plan --resource-group $planRg"
+$existingApp = Get-AzResourceOrNull "az webapp show --name $webApp --resource-group $rg"
+if (($null -ne $existingPlan -and $existingPlan.reserved -ne $true) -or
+    ($null -ne $existingApp -and $existingApp.reserved -ne $true)) {
+    throw "The existing plan '$plan' or web app '$webApp' is Windows. Azure cannot convert these resources to Linux. Back up and explicitly remove the Windows web app and plan before rerunning infrastructure. This script will not delete them. Retain shared services."
+}
+
+if ($null -ne $existingPlan -and
+    ($existingPlan.location -replace '\s', '') -ine ($names.Location -replace '\s', '')) {
+    throw "Shared plan '$plan' must be in '$($names.Location)' so all applications use the same region."
+}
+
+$sharedGroup = Get-AzResourceOrNull "az group show --name $planRg"
+if ($null -eq $sharedGroup) {
+    az group create --name $planRg --location $names.Location --tags $script:TagArguments | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to create shared hosting resource group '$planRg'." }
+}
+
+$existingRegistry = Get-AzResourceOrNull "az acr show --name $registry --resource-group $rg"
+if ($null -eq $existingRegistry) {
+    az acr create --name $registry --resource-group $rg --location $names.Location --sku Basic --admin-enabled false --role-assignment-mode rbac --tags $script:TagArguments | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to create container registry '$registry'." }
+}
 
 if ($null -eq $existingPlan) {
     Write-Host "App Service plan '$plan' does not exist. Creating..."
-    # Capacity and provisioning errors can be transient; retry with backoff.
-    # Free (F1)/Shared (D1) tier creation is subject to a stricter, abuse-prevention
-    # throttle on the ARM side that takes much longer to clear than ordinary transient
-    # errors, so back off far more aggressively when that specific error is seen.
     $maxAttempts = 5
     for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-        $createOutput = az appservice plan create --name $plan --resource-group $rg --location $names.Location --sku $desiredPlanSku --is-linux false --tags $script:TagArguments 2>&1
+        $createOutput = az appservice plan create --name $plan --resource-group $planRg --location $names.Location --sku $desiredPlanSku --is-linux --tags $script:TagArguments 2>&1
         if ($LASTEXITCODE -eq 0) { break }
         if ($attempt -eq $maxAttempts) { throw "Failed to create App Service plan '$plan' after $maxAttempts attempts. Last error: $($createOutput | Out-String)" }
 
@@ -47,21 +63,12 @@ if ($null -eq $existingPlan) {
     }
     Write-Host "Created App Service plan '$plan'."
 
-    # Re-read the plan so runtime logic below can rely on plan OS information.
-    $existingPlan = Get-AzResourceOrNull "az appservice plan show --name $plan --resource-group $rg"
 }
 else {
     Write-Host "App Service plan '$plan' exists. Comparing properties..."
-    if ($desiredPlanSku -eq 'D1' -and (
-        $existingPlan.reserved -eq $true -or
-        ($null -ne $existingPlan.kind -and ($existingPlan.kind -as [string]).ToLowerInvariant().Contains('linux'))
-    )) {
-        throw "The Shared (D1) App Service tier requires a Windows plan. Existing plan '$plan' is Linux and cannot be converted in place."
-    }
-
     if ($existingPlan.sku.name -ne $desiredPlanSku) {
         Write-Host "SKU drift detected ('$($existingPlan.sku.name)' vs '$desiredPlanSku'). Updating..."
-        az appservice plan update --name $plan --resource-group $rg --sku $desiredPlanSku | Out-Null
+        az appservice plan update --name $plan --resource-group $planRg --sku $desiredPlanSku | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Failed to update App Service plan '$plan'." }
         Write-Host "Updated App Service plan '$plan' SKU."
     }
@@ -70,23 +77,10 @@ else {
     }
 }
 
-# Detect plan OS from a stable CLI query first, then fall back to object fields.
-$reservedValue = (az appservice plan show --name $plan --resource-group $rg --query reserved -o tsv 2>$null)
-if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($reservedValue)) {
-    $isLinuxPlan = $reservedValue.Trim().ToLowerInvariant() -eq 'true'
+$planId = az appservice plan show --name $plan --resource-group $planRg --query id -o tsv
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($planId)) {
+    throw "Failed to resolve shared plan '$plan'."
 }
-elseif ($null -ne $existingPlan.reserved) {
-    $isLinuxPlan = [bool]$existingPlan.reserved
-}
-elseif ($null -ne $existingPlan.kind -and ($existingPlan.kind -as [string]).ToLowerInvariant().Contains('linux')) {
-    $isLinuxPlan = $true
-}
-else {
-    $isLinuxPlan = $false
-}
-
-$planOs = if ($isLinuxPlan) { 'Linux' } else { 'Windows' }
-Write-Host "Detected plan OS: $planOs."
 
 # --- Web app ---
 Write-Host "Checking web app '$webApp'..."
@@ -95,46 +89,20 @@ $existingApp = Get-AzResourceOrNull "az webapp show --name $webApp --resource-gr
 if ($null -eq $existingApp) {
     Write-Host "Web app '$webApp' does not exist. Creating..."
 
-    $createFailed = $false
-
-    if ($isLinuxPlan) {
-        az webapp create --name $webApp --resource-group $rg --plan $plan --runtime $desiredLinuxRuntimeArg --https-only true --tags $script:TagArguments | Out-Null
-    }
-    else {
-        az webapp create --name $webApp --resource-group $rg --plan $plan --https-only true --tags $script:TagArguments | Out-Null
-    }
-
-    if ($LASTEXITCODE -ne 0) {
-        $createFailed = $true
-    }
-
-    # Some API responses do not expose plan OS consistently; retry with Linux runtime when create fails.
-    if ($createFailed -and -not $isLinuxPlan) {
-        Write-Host "Initial create failed. Retrying with Linux runtime '$desiredLinuxRuntime'..."
-        az webapp create --name $webApp --resource-group $rg --plan $plan --runtime $desiredLinuxRuntimeArg --https-only true --tags $script:TagArguments | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            $isLinuxPlan = $true
-            $createFailed = $false
-        }
-    }
-
-    if ($createFailed) { throw "Failed to create web app '$webApp'." }
-
-    if ($isLinuxPlan) {
-        az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
-    }
-    else {
-        # --runtime (rather than --net-framework-version) also populates the CURRENT_STACK
-        # metadata the portal/runtime use to select the stack. Without it the web app's
-        # Stack settings show as blank and the app fails to start.
-        az webapp config set --name $webApp --resource-group $rg --runtime $desiredWindowsRuntimeArg --min-tls-version $desiredMinTls | Out-Null
-    }
-
+    az webapp create --name $webApp --resource-group $rg --plan $planId --deployment-container-image-name mcr.microsoft.com/dotnet/samples:aspnetapp --https-only true --tags $script:TagArguments | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to create web app '$webApp'." }
+    az webapp config set --name $webApp --resource-group $rg --min-tls-version $desiredMinTls | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to configure web app '$webApp'." }
     Write-Host "Created web app '$webApp'."
 }
 else {
     Write-Host "Web app '$webApp' exists. Comparing properties..."
+
+    $currentPlanId = $existingApp.appServicePlanId
+    if ([string]::IsNullOrWhiteSpace($currentPlanId)) { $currentPlanId = $existingApp.serverFarmId }
+    if ($currentPlanId -ine $planId) {
+        throw "Web app '$webApp' is not attached to shared plan '$plan'. Explicitly migrate or recreate this app on the shared plan before rerunning. Retire unused environment-specific plans separately to avoid ongoing charges."
+    }
 
     if ($existingApp.httpsOnly -ne $true) {
         Write-Host "HTTPS-only drift detected. Enabling..."
@@ -144,17 +112,8 @@ else {
 
     $config = az webapp config show --name $webApp --resource-group $rg | ConvertFrom-Json
     $needsConfigUpdate = $false
-    if ($isLinuxPlan) {
-        if ($config.linuxFxVersion -ne $desiredLinuxRuntime) {
-            Write-Host "Linux runtime drift detected ('$($config.linuxFxVersion)' vs '$desiredLinuxRuntime')."
-            $needsConfigUpdate = $true
-        }
-    }
-    else {
-        if ($config.netFrameworkVersion -ne $desiredFramework) {
-            Write-Host ".NET framework drift detected ('$($config.netFrameworkVersion)' vs '$desiredFramework')."
-            $needsConfigUpdate = $true
-        }
+    if ($config.linuxFxVersion -notlike 'DOCKER|*') {
+        throw "Web app '$webApp' is not configured for a container. Review its hosting configuration before deploying."
     }
     if ($config.minTlsVersion -ne $desiredMinTls) {
         Write-Host "Minimum TLS drift detected ('$($config.minTlsVersion)' vs '$desiredMinTls')."
@@ -162,12 +121,7 @@ else {
     }
 
     if ($needsConfigUpdate) {
-        if ($isLinuxPlan) {
-            az webapp config set --name $webApp --resource-group $rg --linux-fx-version $desiredLinuxRuntimeArg --min-tls-version $desiredMinTls | Out-Null
-        }
-        else {
-            az webapp config set --name $webApp --resource-group $rg --runtime $desiredWindowsRuntimeArg --min-tls-version $desiredMinTls | Out-Null
-        }
+        az webapp config set --name $webApp --resource-group $rg --min-tls-version $desiredMinTls | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Failed to update config on web app '$webApp'." }
         Write-Host "Updated web app '$webApp' configuration."
     }
@@ -190,3 +144,20 @@ if ($null -eq $identity -or [string]::IsNullOrWhiteSpace($identity.principalId))
 else {
     Write-Host "Web app '$webApp' already has a system-assigned managed identity."
 }
+
+$principalId = Get-WebAppPrincipalId -WebAppName $webApp -ResourceGroup $rg
+if ([string]::IsNullOrWhiteSpace($principalId)) { throw "Managed identity for '$webApp' is unavailable." }
+$registryId = az acr show --name $registry --resource-group $rg --query id -o tsv
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($registryId)) { throw "Failed to resolve registry '$registry'." }
+Ensure-RoleAssignment -Scope $registryId -RoleName 'AcrPull' -AssigneeObjectId $principalId -PrincipalType ServicePrincipal -AssigneeDisplayName $webApp
+
+az webapp config set --name $webApp --resource-group $rg --always-on true --web-sockets-enabled true | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Failed to configure container hosting on '$webApp'." }
+$appId = az webapp show --name $webApp --resource-group $rg --query id -o tsv
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($appId)) { throw "Failed to resolve web app '$webApp'." }
+az resource update --ids "$appId/config/web" --set properties.acrUseManagedIdentityCreds=true properties.healthCheckPath=/health/live --output none
+if ($LASTEXITCODE -ne 0) { throw "Failed to configure registry authentication for '$webApp'." }
+az webapp config appsettings set --name $webApp --resource-group $rg --settings WEBSITES_PORT=8080 ASPNETCORE_HTTP_PORTS=8080 WEBSITES_ENABLE_APP_SERVICE_STORAGE=false PLAYWRIGHT_BROWSERS_PATH=/ms-playwright --output none
+if ($LASTEXITCODE -ne 0) { throw "Failed to configure container settings for '$webApp'." }
+az webapp log config --name $webApp --resource-group $rg --docker-container-logging filesystem --output none
+if ($LASTEXITCODE -ne 0) { throw "Failed to enable container logs for '$webApp'." }
