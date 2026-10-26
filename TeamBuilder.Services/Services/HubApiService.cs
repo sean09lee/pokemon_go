@@ -47,7 +47,12 @@ public class HubApiService(ICacheService cacheService) : IHubApiService
       var page = await context.NewPageAsync();
       await page.GotoAsync(url, new PageGotoOptions
       {
-        WaitUntil = WaitUntilState.NetworkIdle,
+        WaitUntil = WaitUntilState.DOMContentLoaded,
+        Timeout = (float)DefaultHubTimeout.TotalMilliseconds
+      });
+      await page.Locator("table tbody tr a[href*='/pokemon/']").First.WaitForAsync(new LocatorWaitForOptions
+      {
+        State = WaitForSelectorState.Visible,
         Timeout = (float)DefaultHubTimeout.TotalMilliseconds
       });
 

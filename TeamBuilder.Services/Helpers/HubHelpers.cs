@@ -55,8 +55,6 @@ internal class HubHelpers
                         await select.SelectOptionAsync(new SelectOptionValue { Label = $"Show {optionValue}" });
                     }
 
-                    await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
                     try
                     {
                         await page.WaitForFunctionAsync(
@@ -69,7 +67,6 @@ internal class HubHelpers
                         // table may already be fully loaded or unchanged; continue
                     }
 
-                    await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                     await page.WaitForTimeoutAsync(500);
                     return;
                 }

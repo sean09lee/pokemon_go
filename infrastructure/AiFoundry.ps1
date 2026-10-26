@@ -67,6 +67,14 @@ else {
     }
 }
 
+$aiScope = az cognitiveservices account show --name $aiFoundry --resource-group $rg --query id -o tsv
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($aiScope)) { throw "Failed to resolve AI account '$aiFoundry'." }
+$webAppPrincipalId = Get-WebAppPrincipalId -WebAppName $names.WebApp -ResourceGroup $rg
+if ([string]::IsNullOrWhiteSpace($webAppPrincipalId)) {
+    throw "Web app '$($names.WebApp)' needs a managed identity before AI access can be configured. Run the App Service infrastructure step first."
+}
+Ensure-RoleAssignment -Scope $aiScope -RoleName 'Cognitive Services OpenAI User' -AssigneeObjectId $webAppPrincipalId -PrincipalType ServicePrincipal -AssigneeDisplayName "web app '$($names.WebApp)'"
+
 # --- Model deployment ---
 # Ministral-3B is the smallest/cheapest chat model available to this subscription
 # (verified via 'az cognitiveservices account list-models' - the subscription has

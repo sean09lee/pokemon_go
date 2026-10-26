@@ -232,10 +232,13 @@ function az {
     switch -Regex ($command) {
         '^account show ' { return '00000000-0000-0000-0000-000000000000' }
         '^provider show ' { return 'Registered' }
+        '^cognitiveservices account show .*--query id' { return '/subscriptions/test/resourceGroups/dev-rg-teambuilder24bc/providers/Microsoft.CognitiveServices/accounts/dev-ai-teambuilder24bc' }
         '^cognitiveservices account show .*--query properties.endpoint' { return 'https://example.invalid/' }
         '^cognitiveservices account show ' { return '{"kind":"AIServices","sku":{"name":"S0"}}' }
         '^cognitiveservices account deployment show ' { return '{"properties":{"model":{"name":"Ministral-3B","version":"1"}},"sku":{"name":"GlobalStandard"}}' }
         '^cognitiveservices account keys list ' { return $global:AiTestKey }
+        '^webapp identity show ' { return '11111111-1111-1111-1111-111111111111' }
+        '^role assignment list ' { return '/existing/ai-user-assignment' }
         '^keyvault show ' { return 'https://test-vault.vault.azure.net/' }
         '^keyvault secret show ' {
             if ($null -eq $global:AiTestSecret) { $global:LASTEXITCODE = 1; return }
@@ -266,6 +269,13 @@ function az {
 
 try {
     & "$repoRoot/infrastructure/AiFoundry.ps1" -Environment dev
+    $aiRoleLookup = @($global:AiTestCommands | Where-Object { ($_[0..2] -join ' ') -eq 'role assignment list' })
+    if ($aiRoleLookup.Count -ne 1 -or
+        $aiRoleLookup[0][[array]::IndexOf($aiRoleLookup[0], '--role') + 1] -ne 'Cognitive Services OpenAI User' -or
+        $aiRoleLookup[0][[array]::IndexOf($aiRoleLookup[0], '--scope') + 1] -notmatch '/accounts/dev-ai-teambuilder24bc$' -or
+        ($aiRoleLookup[0] -join ' ') -notmatch '11111111-1111-1111-1111-111111111111') {
+        throw 'Web app managed identity did not receive account-scoped chat inference access.'
+    }
     $expectedPrompt = "You are an expert Pok$([char]0x00E9)mon team-building advisor named Professor Oak. Help users build balanced, competitive teams by analyzing type coverage, synergy, and common threats. Keep responses concise and actionable."
     if ($global:AiTestSecret -cne $global:AiTestKey -or
         $global:AiTestSettings['AIAdvisor:ApiKey|'] -ne 'https://test-vault.vault.azure.net/secrets/AIAdvisor-ApiKey' -or
