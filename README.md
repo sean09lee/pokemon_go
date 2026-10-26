@@ -60,9 +60,11 @@ Default local URLs (from launch settings):
 
 ## Pipelines
 
-- [![Build Status](https://sean09lee.visualstudio.com/Team%20Builder/_apis/build/status%2FBuilds%2FTeamBuilder-Build?branchName=main)](https://sean09lee.visualstudio.com/Team%20Builder/_build/latest?definitionId=18&branchName=main)
-- [![Release Status](https://sean09lee.visualstudio.com/Team%20Builder/_apis/build/status%2FReleases%2FTeamBuilder-Release?branchName=main)](https://sean09lee.visualstudio.com/Team%20Builder/_build/latest?definitionId=19&branchName=main)
-- [![Infrastructure Status](https://sean09lee.visualstudio.com/Team%20Builder/_apis/build/status%2FInfrastructure%2FTeamBuilder-Infrastructure?branchName=main)](https://sean09lee.visualstudio.com/Team%20Builder/_build/latest?definitionId=17&branchName=main)
+| Pipeline | Status |
+| --- | --- |
+| Build | [![Build Status](https://sean09lee.visualstudio.com/Team%20Builder/_apis/build/status%2FBuilds%2FTeamBuilder-Build?branchName=main)](https://sean09lee.visualstudio.com/Team%20Builder/_build/latest?definitionId=18&branchName=main) |
+| Release | [![Release Status](https://sean09lee.visualstudio.com/Team%20Builder/_apis/build/status%2FReleases%2FTeamBuilder-Release?branchName=main)](https://sean09lee.visualstudio.com/Team%20Builder/_build/latest?definitionId=19&branchName=main) |
+| Infrastructure | [![Infrastructure Status](https://sean09lee.visualstudio.com/Team%20Builder/_apis/build/status%2FInfrastructure%2FTeamBuilder-Infrastructure?branchName=main)](https://sean09lee.visualstudio.com/Team%20Builder/_build/latest?definitionId=17&branchName=main) |
 
 ## Notes
 

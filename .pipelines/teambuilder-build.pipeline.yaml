@@ -1,13 +1,13 @@
 # CI build pipeline for PokemonGoTeamBuilder
 # - Restores, builds, tests, and publishes the Blazor web app
-# - Produces a single zip artifact consumed by release.pipeline.yaml
+# - Produces a tested Linux container image consumed by the release pipeline
 trigger:
   branches:
     include:
       - develop
 
 pool:
-  vmImage: 'windows-latest'
+  vmImage: 'ubuntu-latest'
 
 variables:
   buildConfiguration: 'Release'
@@ -55,48 +55,36 @@ steps:
     mergeTestResults: true
     failTaskOnFailedTests: true
 
-- task: DotNetCoreCLI@2
-  displayName: 'Publish Web App'
+- task: Docker@2
+  displayName: 'Build Linux container'
   inputs:
-    command: 'publish'
-    publishWebProjects: false
-    projects: '$(webProjectPath)'
-    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/app'
-    zipAfterPublish: false
-    modifyOutputPath: false
+    command: 'build'
+    repository: 'teambuilder'
+    Dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+    buildContext: '$(Build.SourcesDirectory)'
+    tags: '$(Build.BuildId)'
 
 - task: PowerShell@2
-  displayName: 'Install and package Playwright Chromium'
+  displayName: 'Verify Chromium and export container'
   inputs:
     pwsh: true
     targetType: 'inline'
     script: |
       $ErrorActionPreference = 'Stop'
-      $publishPath = '$(Build.ArtifactStagingDirectory)/app'
-      $driverPath = Join-Path $publishPath '.playwright/node/win32_x64/node.exe'
-      if (-not (Test-Path $driverPath)) {
-          throw "Playwright's Windows driver was not published at '$driverPath'."
-      }
-
-      & (Join-Path $publishPath 'playwright.ps1') install chromium --only-shell
+      $image = 'teambuilder:$(Build.BuildId)'
+      $browserCheck = "const { chromium } = require('/app/.playwright/package'); (async () => { const browser = await chromium.launch({ headless: true }); await browser.close(); })().catch(error => { console.error(error); process.exit(1); });"
+      docker run --rm --ipc=host --entrypoint /app/.playwright/node/linux-x64/node $image -e $browserCheck
       if ($LASTEXITCODE -ne 0) {
-          throw 'Failed to install Playwright Chromium.'
+          throw 'Chromium failed to launch inside the Linux container.'
       }
 
-      $browserPath = Join-Path $publishPath '.playwright/package/.local-browsers'
-        if (-not (Get-ChildItem -Path $browserPath -Filter 'chrome-headless-shell.exe' -Recurse -File)) {
-          throw "Playwright Chromium headless shell was not installed under '$browserPath'."
+      docker image save --output '$(Build.ArtifactStagingDirectory)/image.tar' $image
+      if ($LASTEXITCODE -ne 0) {
+          throw 'Failed to export the container image.'
       }
-
-      [System.IO.Compression.ZipFile]::CreateFromDirectory($publishPath, '$(Build.ArtifactStagingDirectory)/teambuilder.zip')
-        $packageBytes = (Get-Item '$(Build.ArtifactStagingDirectory)/teambuilder.zip').Length
-        $unpackedBytes = (Get-ChildItem -Path $publishPath -Recurse -File -Force | Measure-Object -Property Length -Sum).Sum
-        Write-Host ('Deployment ZIP: {0:N1} MiB; unpacked app: {1:N1} MiB' -f ($packageBytes / 1MB), ($unpackedBytes / 1MB))
-  env:
-    PLAYWRIGHT_BROWSERS_PATH: '0'
 
 - task: PublishPipelineArtifact@1
   displayName: 'Publish Artifact'
   inputs:
-    targetPath: '$(Build.ArtifactStagingDirectory)/teambuilder.zip'
+    targetPath: '$(Build.ArtifactStagingDirectory)/image.tar'
     artifactName: '$(artifactName)'
