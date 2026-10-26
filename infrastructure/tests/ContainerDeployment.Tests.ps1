@@ -169,4 +169,94 @@ foreach ($pipeline in @('.pipelines/teambuilder-build.pipeline.yaml', '.pipeline
     }
 }
 
-Write-Host 'PowerShell syntax, shared dev/prod B1 plan, separate applications, Windows migration guard, infrastructure rerun, and pipeline contracts passed.'
+$global:AiTestCommands = [System.Collections.Generic.List[object]]::new()
+$global:AiTestSettings = @{}
+$global:AiTestSecret = $null
+$global:AiTestKey = 'fake-foundry-key-for-tests'
+$global:AiTestDenySecretWrite = $false
+function az {
+    $command = $args -join ' '
+    $global:AiTestCommands.Add(@($args))
+    $global:LASTEXITCODE = 0
+    switch -Regex ($command) {
+        '^account show ' { return '00000000-0000-0000-0000-000000000000' }
+        '^provider show ' { return 'Registered' }
+        '^cognitiveservices account show .*--query properties.endpoint' { return 'https://example.invalid/' }
+        '^cognitiveservices account show ' { return '{"kind":"AIServices","sku":{"name":"S0"}}' }
+        '^cognitiveservices account deployment show ' { return '{"properties":{"model":{"name":"Ministral-3B","version":"1"}},"sku":{"name":"GlobalStandard"}}' }
+        '^cognitiveservices account keys list ' { return $global:AiTestKey }
+        '^keyvault show ' { return 'https://test-vault.vault.azure.net/' }
+        '^keyvault secret show ' {
+            if ($null -eq $global:AiTestSecret) { $global:LASTEXITCODE = 1; return }
+            return $global:AiTestSecret
+        }
+        '^keyvault secret set ' {
+            if ($global:AiTestDenySecretWrite) { $global:LASTEXITCODE = 1; return }
+            $global:AiTestSecret = $args[[array]::IndexOf($args, '--value') + 1]
+            return
+        }
+        '^appconfig kv (show|set|set-keyvault) ' {
+            $key = $args[[array]::IndexOf($args, '--key') + 1]
+            $labelIndex = [array]::IndexOf($args, '--label')
+            $label = if ($labelIndex -ge 0) { $args[$labelIndex + 1] } else { '' }
+            $identity = "$key|$label"
+            if ($args[2] -eq 'show') {
+                if ($global:AiTestSettings.ContainsKey($identity)) { return $global:AiTestSettings[$identity] }
+                $global:LASTEXITCODE = 1
+                return
+            }
+            $valueArgument = if ($args[2] -eq 'set-keyvault') { '--secret-identifier' } else { '--value' }
+            $global:AiTestSettings[$identity] = $args[[array]::IndexOf($args, $valueArgument) + 1]
+            return
+        }
+        default { throw "Unexpected Azure operation: $($args[0..2] -join ' ')" }
+    }
+}
+
+try {
+    & "$repoRoot/infrastructure/AiFoundry.ps1" -Environment dev
+    $expectedPrompt = "You are an expert Pok$([char]0x00E9)mon team-building advisor named Professor Oak. Help users build balanced, competitive teams by analyzing type coverage, synergy, and common threats. Keep responses concise and actionable."
+    if ($global:AiTestSecret -cne $global:AiTestKey -or
+        $global:AiTestSettings['AIAdvisor:ApiKey|'] -ne 'https://test-vault.vault.azure.net/secrets/AIAdvisor-ApiKey' -or
+        $global:AiTestSettings['AIAdvisor:Endpoint|'] -ne 'https://example.invalid/' -or
+        $global:AiTestSettings['AIAdvisor:DeploymentName|'] -ne 'dev-model-teambuilder24bc' -or
+        $global:AiTestSettings['AIAdvisor:SystemPrompt|'] -cne $expectedPrompt -or
+        $global:AiTestSettings.ContainsKey('AIAdvisor:SystemPrompt|dev')) {
+        throw 'AI key vault reference or unlabeled prompt was seeded incorrectly.'
+    }
+    if ($global:AiTestCommands | Where-Object { $_[0] -eq 'appconfig' -and $_ -contains '--label' }) {
+        throw 'Advisor settings must all use the null label.'
+    }
+    if ($global:AiTestCommands | Where-Object { $_[0] -eq 'appconfig' -and $_ -contains $global:AiTestKey }) {
+        throw 'A raw API key was sent to App Configuration.'
+    }
+
+    $global:AiTestCommands.Clear()
+    & "$repoRoot/infrastructure/AiFoundry.ps1" -Environment dev
+    if ($global:AiTestCommands | Where-Object { ($_[0..2] -join ' ') -eq 'keyvault secret set' }) {
+        throw 'Unchanged API key created an unnecessary secret version.'
+    }
+
+    $global:AiTestKey = 'fake-rotated-foundry-key-for-tests'
+    & "$repoRoot/infrastructure/AiFoundry.ps1" -Environment dev
+    if ($global:AiTestSecret -cne $global:AiTestKey) { throw 'Rotated API key was not synchronized.' }
+
+    $global:AiTestSecret = $null
+    $global:AiTestDenySecretWrite = $true
+    $global:AiTestCommands.Clear()
+    $permissionFailure = $false
+    try { & "$repoRoot/infrastructure/AiFoundry.ps1" -Environment dev }
+    catch {
+        if ($_.Exception.Message -notmatch 'Key Vault Secrets Officer') { throw }
+        $permissionFailure = $true
+    }
+    if (-not $permissionFailure -or ($global:AiTestCommands | Where-Object { ($_[0..2] -join ' ') -eq 'appconfig kv set-keyvault' })) {
+        throw 'Secret write permission failure did not stop reference provisioning.'
+    }
+}
+finally {
+    Remove-Item Function:az
+    Remove-Variable AiTestCommands, AiTestSettings, AiTestSecret, AiTestKey, AiTestDenySecretWrite -Scope Global
+}
+
+Write-Host 'Container deployment, AI prompt labels, Key Vault reference provisioning, API key rotation, and permission failure checks passed.'
