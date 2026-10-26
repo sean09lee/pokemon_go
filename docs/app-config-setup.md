@@ -15,7 +15,9 @@ The default system prompt is:
 
 ## API Key Permissions
 
-The pipeline identity needs permission to list the AI Foundry account keys (`Microsoft.CognitiveServices/accounts/listKeys/action`) and the **Key Vault Secrets Officer** role on the environment's vault. A management-plane Contributor role alone does not grant access to Key Vault secret values. Assign the vault role to the service principal used by `teambuilder_connection`, then allow time for RBAC propagation.
+The pipeline identity needs permission to list the AI Foundry account keys (`Microsoft.CognitiveServices/accounts/listKeys/action`). The Key Vault infrastructure step now also grants the signed-in deployment identity **Key Vault Secrets Officer**, scoped only to the environment's vault. It resolves the identity's object ID from the Azure access token without Microsoft Graph queries or additional pipeline variables.
+
+The identity running `teambuilder_connection` must be allowed to create role assignments on that vault, such as through **Role Based Access Control Administrator** at an appropriate scope. Contributor alone cannot grant roles or access secret values. If the role cannot be granted automatically, an administrator must assign it. New RBAC assignments can take several minutes to propagate; rerun infrastructure if the AI Foundry step initially still reports denied secret access.
 
 The AI Foundry step retrieves the account's primary key and synchronizes the `AIAdvisor-ApiKey` vault secret without printing its value. Unchanged keys do not create new secret versions. App Configuration receives only a versionless secret URI under `AIAdvisor:ApiKey`, with no label. Infrastructure already grants the web app's managed identity **Key Vault Secrets User** access for resolving this reference.
 

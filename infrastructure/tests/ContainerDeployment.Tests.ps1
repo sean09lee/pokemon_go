@@ -11,7 +11,7 @@ if ($dockerfile -notmatch 'chmod -R a\+rX /app/\.playwright' -or
     throw 'The Playwright driver must be accessible and executable, with a check after switching to the non-root app user.'
 }
 
-foreach ($path in @('infrastructure/_common.ps1', 'infrastructure/AppService.ps1', 'infrastructure/AiFoundry.ps1', 'infrastructure/SqlDatabase.ps1')) {
+foreach ($path in @('infrastructure/_common.ps1', 'infrastructure/AppService.ps1', 'infrastructure/AiFoundry.ps1', 'infrastructure/SqlDatabase.ps1', 'infrastructure/KeyVault.ps1')) {
     $tokens = $null
     $parseErrors = $null
     [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot $path), [ref]$tokens, [ref]$parseErrors)
@@ -167,6 +167,57 @@ foreach ($pipeline in @('.pipelines/teambuilder-build.pipeline.yaml', '.pipeline
     if ($yaml -notmatch "vmImage: 'ubuntu-latest'" -or $yaml -notmatch 'image.tar' -or $yaml -match 'zipDeploy|runFromPackage') {
         throw "Pipeline '$pipeline' does not use the Linux container artifact contract."
     }
+}
+
+$global:VaultTestCommands = [System.Collections.Generic.List[object]]::new()
+$global:VaultTestPrincipal = '22222222-2222-2222-2222-222222222222'
+$global:VaultTestAssigned = $false
+$originalAdminGroup = $env:ADMIN_GROUP_OBJECT_ID
+$env:ADMIN_GROUP_OBJECT_ID = '33333333-3333-3333-3333-333333333333'
+function az {
+    $command = $args -join ' '
+    $global:VaultTestCommands.Add(@($args))
+    $global:LASTEXITCODE = 0
+    switch -Regex ($command) {
+        '^account get-access-token ' {
+            $json = @{ oid = $global:VaultTestPrincipal } | ConvertTo-Json -Compress
+            $encoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($json)).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+            return "header.$encoded.signature"
+        }
+        '^account show --query user.type' { return 'servicePrincipal' }
+        '^account show ' { return '00000000-0000-0000-0000-000000000000' }
+        '^provider show ' { return 'Registered' }
+        '^keyvault show .*--query id' { return '/subscriptions/test/resourceGroups/dev-rg-teambuilder24bc/providers/Microsoft.KeyVault/vaults/dev-kv-teambuilder24bc' }
+        '^keyvault show ' { return '{"properties":{"sku":{"name":"standard"},"enableRbacAuthorization":true,"softDeleteRetentionInDays":90}}' }
+        '^webapp identity show ' { return '11111111-1111-1111-1111-111111111111' }
+        '^role assignment list ' {
+            if ($command.Contains($global:VaultTestPrincipal) -and -not $global:VaultTestAssigned) { return }
+            return '/existing/assignment'
+        }
+        '^role assignment create ' { $global:VaultTestAssigned = $true; return }
+        default { throw "Unexpected Azure operation: $($args[0..2] -join ' ')" }
+    }
+}
+try {
+    & "$repoRoot/infrastructure/KeyVault.ps1" -Environment dev
+    $assignment = @($global:VaultTestCommands | Where-Object { ($_[0..2] -join ' ') -eq 'role assignment create' })
+    if ($assignment.Count -ne 1 -or
+        $assignment[0][[array]::IndexOf($assignment[0], '--assignee-object-id') + 1] -ne $global:VaultTestPrincipal -or
+        $assignment[0][[array]::IndexOf($assignment[0], '--role') + 1] -ne 'Key Vault Secrets Officer' -or
+        $assignment[0][[array]::IndexOf($assignment[0], '--assignee-principal-type') + 1] -ne 'ServicePrincipal' -or
+        $assignment[0][[array]::IndexOf($assignment[0], '--scope') + 1] -notmatch '/vaults/dev-kv-teambuilder24bc$') {
+        throw 'Pipeline identity was not granted vault-scoped Key Vault Secrets Officer using its object ID.'
+    }
+    $global:VaultTestCommands.Clear()
+    & "$repoRoot/infrastructure/KeyVault.ps1" -Environment dev
+    if ($global:VaultTestCommands | Where-Object { ($_[0..2] -join ' ') -eq 'role assignment create' }) {
+        throw 'An existing deployment identity vault role was recreated.'
+    }
+}
+finally {
+    Remove-Item Function:az
+    Remove-Variable VaultTestCommands, VaultTestPrincipal, VaultTestAssigned -Scope Global
+    $env:ADMIN_GROUP_OBJECT_ID = $originalAdminGroup
 }
 
 $global:AiTestCommands = [System.Collections.Generic.List[object]]::new()

@@ -83,6 +83,31 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($keyVaultScope)) { thro
 
 Ensure-RoleAssignment -Scope $keyVaultScope -RoleName 'Key Vault Secrets Officer'
 
+$accessToken = az account get-access-token --query accessToken -o tsv
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($accessToken)) {
+    throw 'Failed to resolve the signed-in identity for Key Vault secret provisioning.'
+}
+try {
+    $payload = $accessToken.Split('.')[1].Replace('-', '+').Replace('_', '/')
+    $payload = $payload.PadRight($payload.Length + ((4 - $payload.Length % 4) % 4), '=')
+    $claims = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json
+    $pipelinePrincipalId = $claims.oid
+    if ($pipelinePrincipalId -notmatch '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$') {
+        throw 'The signed-in Azure token does not contain a valid principal object ID.'
+    }
+}
+finally {
+    $accessToken = $null
+    $payload = $null
+    $claims = $null
+}
+$accountType = az account show --query user.type -o tsv
+if ($LASTEXITCODE -ne 0 -or $accountType -notin @('user', 'servicePrincipal')) {
+    throw 'Failed to determine the signed-in Azure principal type.'
+}
+$principalType = if ($accountType -eq 'servicePrincipal') { 'ServicePrincipal' } else { 'User' }
+Ensure-RoleAssignment -Scope $keyVaultScope -RoleName 'Key Vault Secrets Officer' -AssigneeObjectId $pipelinePrincipalId -PrincipalType $principalType -AssigneeDisplayName 'infrastructure deployment identity'
+
 # --- RBAC: grant the web app's managed identity read access to secrets ---
 $webApp = $names.WebApp
 $webAppPrincipalId = Get-WebAppPrincipalId -WebAppName $webApp -ResourceGroup $rg
