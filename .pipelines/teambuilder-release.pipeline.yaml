@@ -27,7 +27,7 @@ resources:
   pipelines:
   - pipeline: build
     source: 'TeamBuilder-Build'
-    trigger: true
+    trigger: none
 
 # resourceGroup and webAppName are set at runtime by the 'Resolve resource names'
 # step below, sourced from infrastructure/_common.ps1.
