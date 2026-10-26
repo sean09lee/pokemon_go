@@ -12,7 +12,7 @@ $script:TagArguments = $script:DefaultTags.GetEnumerator() | ForEach-Object { "$
 # (SQL server, Key Vault, App Configuration, web apps) must be unique across ALL of
 # Azure, so hashing the subscription id keeps collisions extremely unlikely while
 # staying stable between pipeline runs (the scripts remain idempotent). 4 hex chars
-# is the most that fits Key Vault's 24-character limit ('teambuilder-kv-test-xxxx').
+# also keeps names within Key Vault's 24-character limit ('test-kv-teambuilderxxxx').
 # If a collision ever occurs, bump $script:UniqueSalt to re-roll every suffix.
 $script:UniqueSalt = 'v1'
 
@@ -38,7 +38,7 @@ function Get-UniqueSuffix {
     return $script:UniqueSuffix
 }
 
-# Resource names include the environment segment and unique suffix in every environment.
+# Hosting capacity is shared; application resources remain environment-specific.
 function Get-InfraNames {
     param(
         [Parameter(Mandatory)]
@@ -46,23 +46,26 @@ function Get-InfraNames {
         [string]$Environment
     )
 
-    $suffix = "-$Environment"
     $unique = Get-UniqueSuffix
 
     [ordered]@{
         Environment   = $Environment
         Location      = $script:Location
-        ResourceGroup = "teambuilder-rg$suffix-$unique"
-        Plan          = "teambuilder-plan$suffix-$unique"
-        WebApp        = "teambuilder-web$suffix-$unique"
-        AppInsights   = "teambuilder-insights$suffix-$unique"
-        LogAnalytics  = "teambuilder-logs$suffix-$unique"
-        AppConfig     = "teambuilder-config$suffix-$unique"
-        KeyVault      = "teambuilder-kv$suffix-$unique"
-        SqlServer     = "teambuilder-sql$suffix-$unique"
-        SqlDatabase   = 'teambuilder'
+        ResourceGroup = "$Environment-rg-teambuilder$unique"
+        PlanResourceGroup = "shared-rg-teambuilder$unique"
+        Plan          = "shared-plan-teambuilder$unique"
+        WebApp        = "$Environment-web-teambuilder$unique"
+        Registry      = "${Environment}acrteambuilder$unique"
+        AppInsights   = "$Environment-insights-teambuilder$unique"
+        LogAnalytics  = "$Environment-logs-teambuilder$unique"
+        AppConfig     = "$Environment-config-teambuilder$unique"
+        KeyVault      = "$Environment-kv-teambuilder$unique"
+        SqlServer     = "$Environment-sql-teambuilder$unique"
+        SqlDatabase   = "$Environment-db-teambuilder$unique"
+        SqlFirewallRule = "$Environment-firewall-teambuilder$unique"
         SqlAdminUser  = 'teambuilderadmin'
-        AiFoundry     = "teambuilder-ai$suffix-$unique"
+        AiFoundry     = "$Environment-ai-teambuilder$unique"
+        AiDeployment  = "$Environment-model-teambuilder$unique"
     }
 }
 

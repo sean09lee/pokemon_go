@@ -10,11 +10,13 @@ var configuration = builder.Configuration;
 
 // Add app configuration
 services.AddAppConfiguration(configuration);
+services.AddApplicationTelemetry(configuration);
 
 // Add services to the container
 services.AddServices(configuration);
 
 var app = builder.Build();
+app.AddApplicationLifecycleTracing();
 
 app.AddHttpPipeline();
 

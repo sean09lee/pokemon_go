@@ -67,12 +67,20 @@ else {
     }
 }
 
+$aiScope = az cognitiveservices account show --name $aiFoundry --resource-group $rg --query id -o tsv
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($aiScope)) { throw "Failed to resolve AI account '$aiFoundry'." }
+$webAppPrincipalId = Get-WebAppPrincipalId -WebAppName $names.WebApp -ResourceGroup $rg
+if ([string]::IsNullOrWhiteSpace($webAppPrincipalId)) {
+    throw "Web app '$($names.WebApp)' needs a managed identity before AI access can be configured. Run the App Service infrastructure step first."
+}
+Ensure-RoleAssignment -Scope $aiScope -RoleName 'Cognitive Services OpenAI User' -AssigneeObjectId $webAppPrincipalId -PrincipalType ServicePrincipal -AssigneeDisplayName "web app '$($names.WebApp)'"
+
 # --- Model deployment ---
 # Ministral-3B is the smallest/cheapest chat model available to this subscription
 # (verified via 'az cognitiveservices account list-models' - the subscription has
 # no OpenAI-format models enabled). GlobalStandard bills per token, so the
 # capacity only sets the throughput limit, never the price.
-$desiredDeployment = 'Ministral-3B'
+$desiredDeployment = $names.AiDeployment
 $desiredModelName = 'Ministral-3B'
 $desiredModelVersion = '1'
 $desiredModelFormat = 'Mistral AI'
@@ -101,8 +109,7 @@ else {
 }
 
 # --- Seed the AIAdvisor settings in App Configuration so the app needs no manual setup ---
-# The app reads keys with a null label and with the environment label; these are
-# seeded with the environment label. Key auth works because the app itself
+# Advisor defaults use the null label in each environment's store. Key auth works because the app itself
 # connects via a connection string (local auth stays enabled on the store).
 $appConfig = $names.AppConfig
 $endpoint = (az cognitiveservices account show --name $aiFoundry --resource-group $rg --query properties.endpoint -o tsv)
@@ -110,17 +117,47 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($endpoint)) { throw "Fa
 
 $aiSettings = @(
     @{ Key = 'AIAdvisor:Endpoint'; Value = $endpoint },
-    @{ Key = 'AIAdvisor:DeploymentName'; Value = $desiredDeployment }
+    @{ Key = 'AIAdvisor:DeploymentName'; Value = $desiredDeployment },
+    @{ Key = 'AIAdvisor:SystemPrompt'; Value = "You are an expert Pok$([char]0x00E9)mon team-building advisor named Professor Oak. Help users build balanced, competitive teams by analyzing type coverage, synergy, and common threats. Keep responses concise and actionable." }
 )
 
 foreach ($setting in $aiSettings) {
-    $current = (az appconfig kv show --name $appConfig --key $setting.Key --label $Environment --auth-mode key --query value -o tsv 2>$null)
+    $current = (az appconfig kv show --name $appConfig --key $setting.Key --auth-mode key --query value -o tsv 2>$null)
     if ($LASTEXITCODE -eq 0 -and $current -eq $setting.Value) {
-        Write-Host "App Configuration key '$($setting.Key)' (label '$Environment') is up to date."
+        Write-Host "App Configuration key '$($setting.Key)' (no label) is up to date."
         continue
     }
 
-    Write-Host "Setting App Configuration key '$($setting.Key)' (label '$Environment')..."
-    az appconfig kv set --name $appConfig --key $setting.Key --value $setting.Value --label $Environment --auth-mode key --yes --output none
+    Write-Host "Setting App Configuration key '$($setting.Key)' (no label)..."
+    az appconfig kv set --name $appConfig --key $setting.Key --value $setting.Value --auth-mode key --yes --output none
     if ($LASTEXITCODE -ne 0) { throw "Failed to set App Configuration key '$($setting.Key)'." }
+}
+
+$keyVault = $names.KeyVault
+$secretName = 'AIAdvisor-ApiKey'
+$apiKey = az cognitiveservices account keys list --name $aiFoundry --resource-group $rg --query key1 -o tsv 2>$null
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($apiKey)) {
+    throw "Failed to retrieve the API key for '$aiFoundry'. The pipeline identity needs Microsoft.CognitiveServices/accounts/listKeys/action."
+}
+if ($env:TF_BUILD -eq 'True') { Write-Host "##vso[task.setsecret]$apiKey" }
+
+try {
+    $vaultUri = az keyvault show --name $keyVault --resource-group $rg --query properties.vaultUri -o tsv
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($vaultUri)) { throw "Failed to resolve Key Vault '$keyVault'." }
+    $currentSecret = az keyvault secret show --vault-name $keyVault --name $secretName --query value -o tsv 2>$null
+    if ($LASTEXITCODE -ne 0 -or $currentSecret -cne $apiKey) {
+        az keyvault secret set --vault-name $keyVault --name $secretName --value $apiKey --output none 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to store the AI API key in '$keyVault'. Grant the pipeline identity Key Vault Secrets Officer on this vault and allow RBAC propagation before rerunning."
+        }
+    }
+
+    $secretUri = "$($vaultUri.TrimEnd('/'))/secrets/$secretName"
+    az appconfig kv set-keyvault --name $appConfig --key 'AIAdvisor:ApiKey' --secret-identifier $secretUri --auth-mode key --yes --output none
+    if ($LASTEXITCODE -ne 0) { throw "Failed to configure the AIAdvisor:ApiKey Key Vault reference in '$appConfig'." }
+    Write-Host 'Configured AIAdvisor:ApiKey as a Key Vault reference (no label).'
+}
+finally {
+    $apiKey = $null
+    $currentSecret = $null
 }

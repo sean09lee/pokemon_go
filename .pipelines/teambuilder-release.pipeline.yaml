@@ -1,6 +1,6 @@
 # Release pipeline for PokemonGoTeamBuilder
-# - Downloads the zip artifact produced by build.pipeline.yaml
-# - Deploys to Azure App Service for the selected environment
+# - Downloads the tested Linux container produced by the build pipeline
+# - Pushes to the environment registry and deploys with managed-identity image pulls
 #
 # Single parameter: environment. Resource names are resolved at runtime from
 # infrastructure/_common.ps1 (Get-InfraNames) so they always match what the
@@ -21,13 +21,13 @@ trigger: none
 pr: none
 
 pool:
-  vmImage: 'windows-latest'
+  vmImage: 'ubuntu-latest'
 
 resources:
   pipelines:
   - pipeline: build
     source: 'TeamBuilder-Build'
-    trigger: true
+    trigger: none
 
 # resourceGroup and webAppName are set at runtime by the 'Resolve resource names'
 # step below, sourced from infrastructure/_common.ps1.
@@ -50,69 +50,44 @@ stages:
           - download: build
             artifact: '$(artifactName)'
           - task: AzureCLI@2
-            displayName: 'Resolve resource names'
-            inputs:
-              azureSubscription: '$(azureSubscription)'
-              scriptType: 'pscore'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                . "$(Build.SourcesDirectory)/infrastructure/_common.ps1"
-                $names = Get-InfraNames -Environment '${{ parameters.environment }}'
-                Write-Host "##vso[task.setvariable variable=resourceGroup]$($names.ResourceGroup)"
-                Write-Host "##vso[task.setvariable variable=webAppName]$($names.WebApp)"
-                Write-Host "##vso[task.setvariable variable=appConfigName]$($names.AppConfig)"
-          - task: AzureCLI@2
-            displayName: 'Update appsettings.json'
+            displayName: 'Push and deploy Linux container'
             inputs:
               azureSubscription: '$(azureSubscription)'
               scriptType: 'pscore'
               scriptLocation: 'inlineScript'
               inlineScript: |
                 $ErrorActionPreference = 'Stop'
+                . "$(Build.SourcesDirectory)/infrastructure/_common.ps1"
+                $names = Get-InfraNames -Environment '${{ parameters.environment }}'
+                $buildId = '$(resources.pipeline.build.runID)'
+                if ($buildId -notmatch '^\d+$') { throw 'Unable to resolve the source build ID.' }
+                $registryServer = az acr show --name $names.Registry --resource-group $names.ResourceGroup --query loginServer -o tsv
+                if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($registryServer)) {
+                    throw 'Container registry not found. Run infrastructure for this environment first.'
+                }
+                $sourceImage = "teambuilder:$buildId"
+                $image = "$registryServer/teambuilder:$buildId"
+                docker image load --input '$(Pipeline.Workspace)/build/$(artifactName)/image.tar'
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to load the container artifact.' }
+                docker image tag $sourceImage $image
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to tag the container image.' }
+                az acr login --name $names.Registry --output none
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to authenticate to the container registry. The service connection requires AcrPush access.' }
+                docker image push $image
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to push the container image. Verify the service connection has AcrPush access.' }
 
-                $connectionString = (az appconfig credential list --name $(appConfigName) --resource-group $(resourceGroup) --query "[?name=='Primary'].connectionString" -o tsv)
+                $connectionString = az appconfig credential list --name $names.AppConfig --resource-group $names.ResourceGroup --query "[?name=='Primary'].connectionString" -o tsv
                 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($connectionString)) {
-                    throw "Failed to resolve the primary connection string for App Configuration '$(appConfigName)'."
+                    throw 'Failed to resolve the App Configuration connection string.'
                 }
-
+                Write-Host "##vso[task.setsecret]$connectionString"
                 $label = '${{ parameters.environment }}'.ToLowerInvariant()
-
-                $zipPath = Get-ChildItem -Path '$(Pipeline.Workspace)/build/$(artifactName)' -Filter '*.zip' -Recurse | Select-Object -First 1 -ExpandProperty FullName
-                if ([string]::IsNullOrWhiteSpace($zipPath)) {
-                    throw "Could not locate the published zip artifact under '$(Pipeline.Workspace)/build/$(artifactName)'."
-                }
-
-                $extractPath = Join-Path '$(Agent.TempDirectory)' 'app-package'
-                if (Test-Path $extractPath) {
-                    Remove-Item $extractPath -Recurse -Force
-                }
-                [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extractPath)
-
-                $driverPath = Join-Path $extractPath '.playwright/node/win32_x64/node.exe'
-                $browserPath = Join-Path $extractPath '.playwright/package/.local-browsers'
-                if (-not (Test-Path $driverPath) -or -not (Get-ChildItem -Path $browserPath -Filter 'chrome-headless-shell.exe' -Recurse -File)) {
-                  throw 'The artifact is missing the Playwright Windows driver or Chromium headless shell. Deploy a build that packages Playwright.'
-                }
-
-                $appSettingsPath = Join-Path $extractPath 'appsettings.json'
-                if (-not (Test-Path $appSettingsPath)) {
-                    throw "appsettings.json was not found in the published package at '$appSettingsPath'."
-                }
-
-                $appSettings = Get-Content $appSettingsPath -Raw | ConvertFrom-Json
-                $appSettings.ConnectionStrings.AppConfiguration = $connectionString
-                $appSettings.ConnectionStrings.Label = $label
-                $appSettings | ConvertTo-Json -Depth 10 | Set-Content $appSettingsPath -Encoding utf8
-
-                Remove-Item $zipPath -Force
-                [System.IO.Compression.ZipFile]::CreateFromDirectory($extractPath, $zipPath)
-          - task: AzureWebApp@1
-            displayName: 'Deploy to Azure App Service'
-            inputs:
-              azureSubscription: '$(azureSubscription)'
-              appType: 'webApp'
-              appName: '$(webAppName)'
-              resourceGroupName: '$(resourceGroup)'
-              package: '$(Pipeline.Workspace)/build/$(artifactName)/**/*.zip'
-              deploymentMethod: 'runFromPackage'
-              appSettings: '-PLAYWRIGHT_BROWSERS_PATH 0'
+                az webapp config appsettings delete --name $names.WebApp --resource-group $names.ResourceGroup --setting-names WEBSITE_RUN_FROM_PACKAGE WEBSITE_RUN_FROM_ZIP --output none
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to clear obsolete ZIP deployment settings.' }
+                az webapp config appsettings set --name $names.WebApp --resource-group $names.ResourceGroup --settings "ConnectionStrings__AppConfiguration=$connectionString" "ConnectionStrings__Label=$label" WEBSITES_PORT=8080 ASPNETCORE_HTTP_PORTS=8080 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright --output none
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to configure the application environment.' }
+                az webapp config container set --name $names.WebApp --resource-group $names.ResourceGroup --container-image-name $image --container-registry-url "https://$registryServer" --output none
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to configure the container image.' }
+                az webapp restart --name $names.WebApp --resource-group $names.ResourceGroup --output none
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to restart the container app.' }
+                Write-Host "Deployed $image to https://$($names.WebApp).azurewebsites.net"

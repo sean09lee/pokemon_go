@@ -6,6 +6,8 @@
   </Folder>
   <Folder Name="/docs/">
     <File Path="../docs/ai-function-calling.md" />
+    <File Path="../docs/app-config-setup.md" />
+    <File Path="../docs/linux-container-deployment.md" />
     <File Path="../docs/pokemon-ranking-logic.md" />
     <File Path="../README.md" />
   </Folder>
