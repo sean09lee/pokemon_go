@@ -425,6 +425,19 @@
         color: #9aa7b5;
         text-align: left;
         margin-right: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    .tl-pokemon-cell {
+        min-width: 0;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .tl-pokemon-name {
+        white-space: normal;
+        overflow-wrap: break-word;
+        text-align: right;
     }
 }
 

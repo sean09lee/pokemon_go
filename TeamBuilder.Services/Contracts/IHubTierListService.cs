@@ -18,6 +18,17 @@ public interface IHubTierListService
     Task<(HubRankingResponse Response, List<HubTierRow> Rows)> CrawlAllTypesAsync(
         int limitPerType = 200,
         Func<string, int, int, Task>? reportProgressAsync = null,
+        bool forceRefresh = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Loads tier list rows directly from the on-disk JSON cache for every attacker type, without
+    /// performing any crawl. Attacker types without a cache file are skipped.
+    /// </summary>
+    /// <param name="limitPerType">Maximum number of ranked Pokemon to read per attacker type.</param>
+    /// <param name="cancellationToken">Token used to cancel the read.</param>
+    Task<List<HubTierRow>> LoadAllTypesFromCacheAsync(
+        int limitPerType = 200,
         CancellationToken cancellationToken = default);
 
     /// <summary>
