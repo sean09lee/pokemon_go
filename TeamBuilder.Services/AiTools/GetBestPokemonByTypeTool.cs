@@ -47,7 +47,7 @@ public class GetBestPokemonByTypeTool(IHubApiService hubApiService) : IAiTool
             ? Math.Clamp(parsedLimit, 1, 25)
             : 10;
 
-        var ranked = await hubApiService.CrawlBestPerTypeAsync(attackerType, Math.Max(limit, 25), cancellationToken);
+        var ranked = await hubApiService.CrawlBestPerTypeAsync(attackerType, Math.Max(limit, 25), cancellationToken: cancellationToken);
 
         var top = ranked
             .Take(limit)

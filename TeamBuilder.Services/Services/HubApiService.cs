@@ -15,7 +15,17 @@ public class HubApiService(ICacheService cacheService, ILogger<HubApiService>? l
   private readonly ICacheService _cacheService = cacheService;
   private static readonly TimeSpan DefaultHubTimeout = TimeSpan.FromSeconds(90);
 
-  public async Task<IList<HubRankedPokemon>> CrawlBestPerTypeAsync(string attackerType, int limit = 200, CancellationToken cancellationToken = default)
+  public async Task<IList<HubRankedPokemon>?> TryGetCachedBestPerTypeAsync(string attackerType, int limit = 200, CancellationToken cancellationToken = default)
+  {
+    attackerType = attackerType.Trim().ToLowerInvariant();
+    var cacheKey = GetCacheKey(attackerType, limit);
+    var cached = await _cacheService.TryGetAsync<List<HubRankedPokemon>>(cacheKey, cancellationToken);
+    return cached is not null && cached.Count > 0 ? cached : null;
+  }
+
+  private static string GetCacheKey(string attackerType, int limit) => $"hub-best-per-type-{attackerType}-{limit}";
+
+  public async Task<IList<HubRankedPokemon>> CrawlBestPerTypeAsync(string attackerType, int limit = 200, bool forceRefresh = false, CancellationToken cancellationToken = default)
   {
     attackerType = attackerType.Trim().ToLowerInvariant();
     using var crawlScope = logger?.BeginScope(new Dictionary<string, object>
@@ -24,14 +34,17 @@ public class HubApiService(ICacheService cacheService, ILogger<HubApiService>? l
       ["ProcessId"] = Environment.ProcessId,
       ["InstanceId"] = Environment.GetEnvironmentVariable("WEBSITE_INSTANCE_ID") ?? Environment.MachineName
     });
-    logger?.LogInformation("Hub crawl requested for {AttackerType}, limit {RowLimit}", attackerType, limit);
-    var cacheKey = $"hub-best-per-type-{attackerType}-{limit}";
+    logger?.LogInformation("Hub crawl requested for {AttackerType}, limit {RowLimit}, forceRefresh {ForceRefresh}", attackerType, limit, forceRefresh);
+    var cacheKey = GetCacheKey(attackerType, limit);
 
-    var cached = await _cacheService.TryGetAsync<List<HubRankedPokemon>>(cacheKey, cancellationToken);
-    if (cached is not null && cached.Count > 0)
+    if (!forceRefresh)
     {
-      logger?.LogInformation("Hub cache hit for {AttackerType}: {RowCount} rows", attackerType, cached.Count);
-      return cached;
+      var cached = await _cacheService.TryGetAsync<List<HubRankedPokemon>>(cacheKey, cancellationToken);
+      if (cached is not null && cached.Count > 0)
+      {
+        logger?.LogInformation("Hub cache hit for {AttackerType}: {RowCount} rows", attackerType, cached.Count);
+        return cached;
+      }
     }
 
     var url = $"https://db.pokemongohub.net/pokemon-list/best-per-type/{attackerType}";
