@@ -88,13 +88,13 @@ function az {
         }
         '^appservice plan show .*--query id' { return '/subscriptions/test/resourceGroups/shared-rg-teambuilder24bc/providers/Microsoft.Web/serverfarms/shared-plan-teambuilder24bc' }
         '^appservice plan show ' {
-            if ($global:ContainerTestExisting) { return '{"reserved":true,"location":"West US 2","sku":{"name":"B1"}}' }
+            if ($global:ContainerTestExisting) { return '{"kind":"linux","location":"West US 2","sku":{"name":"B1"}}' }
             $global:LASTEXITCODE = 1
             return
         }
         '^webapp show .*--query id' { return '/subscriptions/test/resourceGroups/test/providers/Microsoft.Web/sites/test' }
         '^webapp show ' {
-            if ($global:ContainerTestAppsExist) { return '{"reserved":true,"httpsOnly":true,"appServicePlanId":"/subscriptions/test/resourceGroups/shared-rg-teambuilder24bc/providers/Microsoft.Web/serverfarms/shared-plan-teambuilder24bc"}' }
+            if ($global:ContainerTestAppsExist) { return '{"kind":"app,linux,container","httpsOnly":true,"appServicePlanId":"/subscriptions/test/resourceGroups/shared-rg-teambuilder24bc/providers/Microsoft.Web/serverfarms/shared-plan-teambuilder24bc"}' }
             $global:LASTEXITCODE = 1
             return
         }

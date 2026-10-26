@@ -24,9 +24,13 @@ $desiredMinTls = '1.2'
 Write-Host "Checking App Service plan '$plan'..."
 $existingPlan = Get-AzResourceOrNull "az appservice plan show --name $plan --resource-group $planRg"
 $existingApp = Get-AzResourceOrNull "az webapp show --name $webApp --resource-group $rg"
-if (($null -ne $existingPlan -and $existingPlan.reserved -ne $true) -or
-    ($null -ne $existingApp -and $existingApp.reserved -ne $true)) {
-    throw "The existing plan '$plan' or web app '$webApp' is Windows. Azure cannot convert these resources to Linux. Back up and explicitly remove the Windows web app and plan before rerunning infrastructure. This script will not delete them. Retain shared services."
+foreach ($resource in @(@{ Name = $plan; Value = $existingPlan }, @{ Name = $webApp; Value = $existingApp })) {
+    if ($null -eq $resource.Value) { continue }
+    if ($resource.Value.reserved -eq $true -or $resource.Value.kind -match '(^|,)\s*linux\s*(,|$)') { continue }
+    if ($resource.Value.reserved -eq $false) {
+        throw "Resource '$($resource.Name)' is Windows. Azure cannot convert these resources to Linux. Back up and explicitly migrate the Windows resource before rerunning infrastructure. This script will not delete it. Retain shared services."
+    }
+    throw "Unable to determine the operating system of '$($resource.Name)' from Azure metadata. A missing reserved property does not mean Windows. Verify the resource configuration before rerunning; no resources have been changed."
 }
 
 if ($null -ne $existingPlan -and
