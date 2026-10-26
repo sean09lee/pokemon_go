@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 using TeamBuilder.Data.Models;
 using TeamBuilder.Data.Responses;
 using TeamBuilder.Services.Contracts;
@@ -14,10 +16,12 @@ public sealed class HubTierListService : IHubTierListService
     ];
 
     private readonly IHubApiService _hubApiService;
+    private readonly ILogger<HubTierListService>? _logger;
 
-    public HubTierListService(IHubApiService hubApiService)
+    public HubTierListService(IHubApiService hubApiService, ILogger<HubTierListService>? logger = null)
     {
         _hubApiService = hubApiService;
+        _logger = logger;
     }
 
     public async Task<(HubRankingResponse Response, List<HubTierRow> Rows)> CrawlAllTypesAsync(
@@ -25,6 +29,16 @@ public sealed class HubTierListService : IHubTierListService
         Func<string, int, int, Task>? reportProgressAsync = null,
         CancellationToken cancellationToken = default)
     {
+        using var activity = new Activity("HubTierListCrawl").Start();
+        var crawlId = Guid.NewGuid().ToString("N");
+        using var crawlScope = _logger?.BeginScope(new Dictionary<string, object>
+        {
+            ["CrawlId"] = crawlId,
+            ["ProcessId"] = Environment.ProcessId,
+            ["InstanceId"] = Environment.GetEnvironmentVariable("WEBSITE_INSTANCE_ID") ?? Environment.MachineName
+        });
+        var elapsed = Stopwatch.StartNew();
+        _logger?.LogInformation("Hub tier-list crawl {CrawlId} started: {TypeCount} types, {RowLimit} rows per type", crawlId, AttackerTypes.Length, limitPerType);
         var rows = new List<HubTierRow>();
         var tierMap = new Dictionary<string, IList<HubRankedPokemon>>(StringComparer.OrdinalIgnoreCase);
 
@@ -32,23 +46,42 @@ public sealed class HubTierListService : IHubTierListService
         {
             cancellationToken.ThrowIfCancellationRequested();
             var attackerType = AttackerTypes[i];
+            _logger?.LogInformation("Hub type {AttackerType} started ({TypeIndex}/{TypeCount}) after {ElapsedMs} ms", attackerType, i + 1, AttackerTypes.Length, elapsed.ElapsedMilliseconds);
 
             using var perTypeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             perTypeCts.CancelAfter(TimeSpan.FromSeconds(120));
 
-            var tierList = await _hubApiService.CrawlBestPerTypeAsync(attackerType, limitPerType, perTypeCts.Token);
+            IList<HubRankedPokemon> tierList;
+            try
+            {
+                tierList = await _hubApiService.CrawlBestPerTypeAsync(attackerType, limitPerType, perTypeCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger?.LogWarning("Hub tier-list crawl {CrawlId} canceled at {AttackerType} after {ElapsedMs} ms; caller canceled: {CallerCanceled}", crawlId, attackerType, elapsed.ElapsedMilliseconds, cancellationToken.IsCancellationRequested);
+                throw;
+            }
+            catch (Exception exception)
+            {
+                _logger?.LogError(exception, "Hub tier-list crawl {CrawlId} failed at {AttackerType} after {ElapsedMs} ms", crawlId, attackerType, elapsed.ElapsedMilliseconds);
+                throw;
+            }
             tierMap[attackerType] = tierList;
             AddTierRows(rows, attackerType, tierList);
+            _logger?.LogInformation("Hub type {AttackerType} completed with {RowCount} rows after {ElapsedMs} ms", attackerType, tierList.Count, elapsed.ElapsedMilliseconds);
 
             if (reportProgressAsync is not null)
             {
+                _logger?.LogInformation("Hub reporting progress for {AttackerType}", attackerType);
                 await reportProgressAsync(attackerType, i + 1, AttackerTypes.Length);
+                _logger?.LogInformation("Hub progress reported for {AttackerType}", attackerType);
             }
         }
 
         SortRows(rows);
 
         var response = BuildResponse(key => tierMap.GetValueOrDefault(key) ?? []);
+        _logger?.LogInformation("Hub tier-list crawl {CrawlId} completed with {RowCount} rows in {ElapsedMs} ms", crawlId, rows.Count, elapsed.ElapsedMilliseconds);
         return (response, rows);
     }
 
