@@ -9,9 +9,13 @@ ENV ASPNETCORE_HTTP_PORTS=8080 \
     ASPNETCORE_FORWARDEDHEADERS_ENABLED=true \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 COPY --from=build /app/publish .
-RUN .playwright/node/linux-x64/node .playwright/package/cli.js install --with-deps --only-shell chromium \
+RUN chmod -R a+rX /app/.playwright \
+    && chmod a+rx /app/.playwright/node/linux-x64/node \
+    && .playwright/node/linux-x64/node .playwright/package/cli.js install --with-deps --only-shell chromium \
     && chmod -R a+rX /ms-playwright \
     && rm -rf /var/lib/apt/lists/*
 USER $APP_UID
+RUN test -x /app/.playwright/node/linux-x64/node \
+    && /app/.playwright/node/linux-x64/node --version
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "TeamBuilder.dll"]

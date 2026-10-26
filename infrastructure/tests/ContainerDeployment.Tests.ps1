@@ -1,6 +1,16 @@
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
+$dockerfile = Get-Content (Join-Path $repoRoot 'Dockerfile') -Raw
+$permissionIndex = $dockerfile.IndexOf('chmod a+rx /app/.playwright/node/linux-x64/node')
+$appUserIndex = $dockerfile.IndexOf('USER $APP_UID')
+$driverCheckIndex = $dockerfile.IndexOf('RUN test -x /app/.playwright/node/linux-x64/node')
+if ($dockerfile -notmatch 'chmod -R a\+rX /app/\.playwright' -or
+    $permissionIndex -lt 0 -or $appUserIndex -le $permissionIndex -or
+    $driverCheckIndex -le $appUserIndex) {
+    throw 'The Playwright driver must be accessible and executable, with a check after switching to the non-root app user.'
+}
+
 foreach ($path in @('infrastructure/_common.ps1', 'infrastructure/AppService.ps1', 'infrastructure/AiFoundry.ps1', 'infrastructure/SqlDatabase.ps1')) {
     $tokens = $null
     $parseErrors = $null
