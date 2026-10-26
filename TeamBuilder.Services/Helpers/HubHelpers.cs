@@ -80,44 +80,53 @@ internal class HubHelpers
 
     internal static async Task<List<HubRankedPokemon>> ExtractRankedPokemonAsync(IPage page, int limit, CancellationToken cancellationToken)
     {
-        var results = new List<HubRankedPokemon>();
-
+        cancellationToken.ThrowIfCancellationRequested();
         var table = await FindLargestTableAsync(page);
         if (table is null)
         {
-            return results;
+            return [];
         }
 
-        var headers = (await table.Locator("thead th").AllTextContentsAsync())
-            .Select(x => x.Trim())
-            .ToList();
+        var snapshot = await table.EvaluateAsync<JsonElement>("""
+            table => ({
+                headers: Array.from(table.querySelectorAll('thead th'), header => header.textContent.trim()),
+                rows: Array.from(table.querySelectorAll('tbody tr'), row => {
+                    const anchor = row.querySelector("a[href*='/pokemon/']");
+                    return {
+                        cells: Array.from(row.querySelectorAll('td'), cell => cell.innerText.trim()),
+                        anchorText: anchor ? anchor.innerText : null,
+                        anchorHref: anchor ? anchor.getAttribute('href') : null
+                    };
+                })
+            })
+            """);
+        return ParseRankedPokemonSnapshot(snapshot, limit, cancellationToken);
+    }
 
-        var rows = table.Locator("tbody tr");
-        var rowCount = await rows.CountAsync();
+    internal static List<HubRankedPokemon> ParseRankedPokemonSnapshot(JsonElement snapshot, int limit, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var results = new List<HubRankedPokemon>();
+        var headers = snapshot.GetProperty("headers").EnumerateArray()
+            .Select(header => header.GetString()?.Trim() ?? string.Empty)
+            .ToList();
+        var rows = snapshot.GetProperty("rows");
+        var rowCount = rows.GetArrayLength();
 
         for (var i = 0; i < rowCount && results.Count < limit; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            var row = rows.Nth(i);
-            var cellLocator = row.Locator("td");
-            var cellCount = await cellLocator.CountAsync();
-            if (cellCount == 0)
+            var row = rows[i];
+            var cells = row.GetProperty("cells").EnumerateArray()
+                .Select(cell => cell.GetString()?.Trim() ?? string.Empty)
+                .ToList();
+            if (cells.Count == 0)
             {
                 continue;
             }
 
-            var cells = new List<string>(cellCount);
-            for (var c = 0; c < cellCount; c++)
-            {
-                var text = await cellLocator.Nth(c).InnerTextAsync();
-                cells.Add(text.Trim());
-            }
-
-            var pokemonAnchor = row.Locator("a[href*='/pokemon/']").First;
-            var hasPokemonAnchor = await pokemonAnchor.CountAsync() > 0;
-            var anchorText = hasPokemonAnchor ? await pokemonAnchor.InnerTextAsync() : null;
-            var anchorHref = hasPokemonAnchor ? await pokemonAnchor.GetAttributeAsync("href") : null;
+            var anchorText = row.GetProperty("anchorText").GetString();
+            var anchorHref = row.GetProperty("anchorHref").GetString();
 
             var identity = ParsePokemonIdentityFromHref(anchorHref);
             if (identity is null)
