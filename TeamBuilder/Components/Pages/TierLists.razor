@@ -20,7 +20,12 @@
             <span class="tb-eyebrow-text">TIER LISTS</span>
             <span class="tb-eyebrow-rule"></span>
         </div>
-        <p class="tl-page-subtitle mb-3">See the best Pok&eacute;mon for raids, ranked by type. Rankings are based on overall performance, consistency, and ease of use.</p>
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+            <p class="tl-page-subtitle mb-0">See the best Pok&eacute;mon for raids, ranked by type. Rankings are based on overall performance, consistency, and ease of use.</p>
+            <button type="button" class="btn btn-outline-light btn-sm flex-shrink-0 d-inline-flex align-items-center gap-1" title="Re-crawl the Hub for the latest tier list data" disabled="@_isLoading" @onclick="LoadTierListsAsync">
+                <LucideIcon Name="refresh-cw" Size="14" /> Refresh Tier Lists
+            </button>
+        </div>
 
         @if (_isLoading)
         {
@@ -32,7 +37,8 @@
         else if (!string.IsNullOrWhiteSpace(_errorMessage))
         {
             <div class="alert alert-danger mt-2" role="alert">@_errorMessage</div>
-            <button type="button" class="btn btn-outline-light mt-2" @onclick="LoadTierListsAsync">Retry</button>
+            <button type="button" class="btn btn-outline-light mt-2" @onclick="LoadFromCacheAsync">Retry</button>
+
         }
         else if (_allTierRows.Count == 0)
         {
@@ -80,7 +86,7 @@
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Pok&eacute;mon</th>
+                                <th>Pokémon</th>
                                 <th>DPS (ER)</th>
                                 <th>TDO (ER)</th>
                                 <th>Overall</th>
@@ -93,7 +99,7 @@
                             {
                                 <tr>
                                     <td data-label="#">@pokemon.Rank</td>
-                                    <td data-label="Pok&eacute;mon">
+                                    <td data-label="Pokémon">
                                         <div class="tl-pokemon-cell">
                                             <img class="tl-pokemon-sprite" src="@GetSpriteUrl(pokemon)" alt="@pokemon.Name sprite" loading="lazy" />
                                             <span class="tl-pokemon-name">@pokemon.Name</span>
@@ -231,7 +237,33 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadTierListsAsync();
+        await LoadFromCacheAsync();
+    }
+
+    private async Task LoadFromCacheAsync()
+    {
+        _errorMessage = null;
+        _allTierRows.Clear();
+        _isLoading = true;
+        _progressMessage = "Loading cached tier lists...";
+        StateHasChanged();
+
+        try
+        {
+            var rows = await HubTierListService.LoadAllTypesFromCacheAsync(200);
+            _allTierRows.AddRange(rows);
+            _selectedAttackerType ??= _attackerTypes.FirstOrDefault(type =>
+                _allTierRows.Any(x => string.Equals(x.AttackerType, type, StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load cached tier lists: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
     }
 
     private async Task LoadTierListsAsync()
@@ -258,7 +290,8 @@
                     _progressPercent = (int)Math.Round((processed / (double)total) * 100d);
                     StateHasChanged();
                 },
-                cancellationToken);
+                forceRefresh: true,
+                cancellationToken: cancellationToken);
 
             _allTierRows.AddRange(rows);
             _selectedAttackerType ??= _attackerTypes.FirstOrDefault(type =>

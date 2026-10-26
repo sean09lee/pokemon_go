@@ -24,9 +24,30 @@ public sealed class HubTierListService : IHubTierListService
         _logger = logger;
     }
 
+    public async Task<List<HubTierRow>> LoadAllTypesFromCacheAsync(
+        int limitPerType = 200,
+        CancellationToken cancellationToken = default)
+    {
+        var rows = new List<HubTierRow>();
+
+        foreach (var attackerType in AttackerTypes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var cached = await _hubApiService.TryGetCachedBestPerTypeAsync(attackerType, limitPerType, cancellationToken);
+            if (cached is not null && cached.Count > 0)
+            {
+                AddTierRows(rows, attackerType, cached);
+            }
+        }
+
+        SortRows(rows);
+        return rows;
+    }
+
     public async Task<(HubRankingResponse Response, List<HubTierRow> Rows)> CrawlAllTypesAsync(
         int limitPerType = 200,
         Func<string, int, int, Task>? reportProgressAsync = null,
+        bool forceRefresh = false,
         CancellationToken cancellationToken = default)
     {
         using var activity = new Activity("HubTierListCrawl").Start();
@@ -54,7 +75,7 @@ public sealed class HubTierListService : IHubTierListService
             IList<HubRankedPokemon> tierList;
             try
             {
-                tierList = await _hubApiService.CrawlBestPerTypeAsync(attackerType, limitPerType, perTypeCts.Token);
+                tierList = await _hubApiService.CrawlBestPerTypeAsync(attackerType, limitPerType, forceRefresh, perTypeCts.Token);
             }
             catch (OperationCanceledException)
             {

@@ -77,10 +77,17 @@ internal sealed class FakeHubApiService : IHubApiService
     public string? LastRequestedAttackerType { get; private set; }
     public int LastRequestedLimit { get; private set; }
 
-    public Task<IList<HubRankedPokemon>> CrawlBestPerTypeAsync(string attackerType, int limit = 200, CancellationToken cancellationToken = default)
+    public Task<IList<HubRankedPokemon>> CrawlBestPerTypeAsync(string attackerType, int limit = 200, bool forceRefresh = false, CancellationToken cancellationToken = default)
     {
         LastRequestedAttackerType = attackerType;
         LastRequestedLimit = limit;
         return Task.FromResult(RankedPokemonToReturn);
+    }
+
+    public Task<IList<HubRankedPokemon>?> TryGetCachedBestPerTypeAsync(string attackerType, int limit = 200, CancellationToken cancellationToken = default)
+    {
+        LastRequestedAttackerType = attackerType;
+        LastRequestedLimit = limit;
+        return Task.FromResult<IList<HubRankedPokemon>?>(RankedPokemonToReturn.Count > 0 ? RankedPokemonToReturn : null);
     }
 }
