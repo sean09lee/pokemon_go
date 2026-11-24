@@ -34,6 +34,7 @@ resources:
 variables:
   azureSubscription: 'teambuilder_connection'
   artifactName: 'teambuilder'
+  orchestratorArtifactName: 'orchestrator'
 
 stages:
 - stage: Deploy_${{ parameters.environment }}
@@ -91,3 +92,61 @@ stages:
                 az webapp restart --name $names.WebApp --resource-group $names.ResourceGroup --output none
                 if ($LASTEXITCODE -ne 0) { throw 'Failed to restart the container app.' }
                 Write-Host "Deployed $image to https://$($names.WebApp).azurewebsites.net"
+
+  - deployment: DeployOrchestrator
+    displayName: 'Deploy Orchestrator to Foundry'
+    dependsOn: DeployWebApp
+    environment: '${{ parameters.environment }}'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+          - download: build
+            artifact: '$(orchestratorArtifactName)'
+
+          - task: AzureCLI@2
+            displayName: 'Push orchestrator and deploy to Foundry'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                $ErrorActionPreference = 'Stop'
+                . "$(Build.SourcesDirectory)/infrastructure/_common.ps1"
+                # Orchestrator always deploys to dev Foundry workspace (shared resource)
+                $names = Get-InfraNames -Environment 'dev'
+                $buildId = '$(resources.pipeline.build.runID)'
+                if ($buildId -notmatch '^\d+$') { throw 'Unable to resolve the source build ID.' }
+
+                $registryServer = az acr show --name $names.Registry --resource-group $names.ResourceGroup --query loginServer -o tsv
+                if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($registryServer)) {
+                    throw 'Container registry not found. Run infrastructure for dev environment first.'
+                }
+
+                $sourceImage = "teambuilder-orchestrator:$buildId"
+                $image = "$registryServer/teambuilder-orchestrator:$buildId"
+
+                docker image load --input '$(Pipeline.Workspace)/build/$(orchestratorArtifactName)/orchestrator-image.tar'
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to load the orchestrator container artifact.' }
+
+                docker image tag $sourceImage $image
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to tag the orchestrator image.' }
+
+                az acr login --name $names.Registry --output none
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to authenticate to the container registry.' }
+
+                docker image push $image
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to push the orchestrator image.' }
+
+                Write-Host "##[group]Orchestrator Deployment"
+                Write-Host "Image URI: $image"
+                Write-Host "Resource Group: $($names.ResourceGroup)"
+                Write-Host "Registry: $($names.Registry)"
+                Write-Host "##[endgroup]"
+
+                # Call infrastructure script to configure Foundry deployment
+                & "$(Build.SourcesDirectory)/infrastructure/OrchestratorFoundry.ps1" -ImageUri $image
+                if ($LASTEXITCODE -ne 0) { throw 'Failed to configure orchestrator in Foundry.' }
+
+                Write-Host "Orchestrator deployed to Foundry: $image"

@@ -1,8 +1,10 @@
-﻿using Azure.Identity;
+using Azure.Identity;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.AzureAppConfiguration;
+using Microsoft.Extensions.DependencyInjection;
 using TeamBuilder.Data.Constants;
 
-namespace TeamBuilder.Extensions;
+namespace TeamBuilder.Configurations.Extensions;
 
 public static class AppConfigRegistration
 {
@@ -18,15 +20,9 @@ public static class AppConfigRegistration
         configuration.AddAzureAppConfiguration(options =>
         {
             options.Connect(connectionString)
+                .ConfigureKeyVault(kv => kv.SetCredential(new DefaultAzureCredential()))
                 .Select(KeyFilter.Any, LabelFilter.Null)
                 .Select(KeyFilter.Any, label)
-                .ConfigureKeyVault(kv =>
-                {
-                    kv.SetCredential(new DefaultAzureCredential(new DefaultAzureCredentialOptions
-                    {
-                        ExcludeManagedIdentityCredential = exclude,
-                    }));
-                })
                 .ConfigureRefresh(refresh =>
                 {
                     refresh.Register(ServiceConstants.Refresh, refreshAll: true);

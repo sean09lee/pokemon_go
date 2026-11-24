@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -8,14 +8,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\TeamBuilder.Data\TeamBuilder.Data.csproj" />
-    <ProjectReference Include="..\TeamBuilder.Services\TeamBuilder.Services.csproj" />
-    <ProjectReference Include="..\TeamBuilder.AI\TeamBuilder.AI.csproj" />
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.AzureAppConfiguration" Version="8.6.0" />
+    <ProjectReference Include="..\TeamBuilder.Configurations\TeamBuilder.Configurations.csproj" />
+    <ProjectReference Include="..\TeamBuilder.Data\TeamBuilder.Data.csproj" />
+    <ProjectReference Include="..\TeamBuilder.Services\TeamBuilder.Services.csproj" />
+    <ProjectReference Include="..\TeamBuilder.AI\TeamBuilder.AI.csproj" />
   </ItemGroup>
 
 </Project>

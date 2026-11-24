@@ -1,0 +1,42 @@
+using TeamBuilder.Configurations.Extensions;
+using TeamBuilder.Orchestrator.Extensions;
+
+var builder = WebApplication.CreateBuilder(args);
+var services = builder.Services;
+var configuration = builder.Configuration;
+
+// Add controllers
+services.AddControllers();
+
+// Add app configuration
+services.AddAppConfiguration(configuration);
+
+// Add services
+services.AddOrchestratorServices();
+
+// Add logging
+services.AddLogging();
+
+// Add Swagger/OpenAPI
+services.AddEndpointsApiExplorer();
+services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Enable Swagger/OpenAPI
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+app.UseAuthorization();
+app.MapControllers();
+
+// Health check endpoint
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
+    .WithName("Health")
+    .DisableAntiforgery();
+
+app.Run();

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using TeamBuilder.Components;
+using TeamBuilder.Configurations.Extensions;
 using TeamBuilder.Extensions;
 using TeamBuilder.HealthChecks;
 

@@ -122,3 +122,4 @@ stages:
               scriptPath: '$(scriptFolder)/AiFoundry.ps1'
               arguments: '-Environment ${{ parameters.environment }}'
               failOnStandardError: false
+
