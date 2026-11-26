@@ -9,7 +9,7 @@ var configuration = builder.Configuration;
 services.AddControllers();
 
 // Add app configuration
-services.AddAppConfiguration(configuration);
+services.AddAppConfiguration(configuration, builder.Environment);
 
 // Add services
 services.AddOrchestratorServices();
