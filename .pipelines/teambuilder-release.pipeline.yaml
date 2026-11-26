@@ -51,7 +51,7 @@ stages:
           - download: build
             artifact: '$(artifactName)'
           - task: AzureCLI@2
-            displayName: 'Push and deploy Linux container'
+            displayName: 'Deploy Web App'
             inputs:
               azureSubscription: '$(azureSubscription)'
               scriptType: 'pscore'
@@ -94,7 +94,7 @@ stages:
                 Write-Host "Deployed $image to https://$($names.WebApp).azurewebsites.net"
 
   - deployment: DeployOrchestrator
-    displayName: 'Deploy Orchestrator to Foundry'
+    displayName: 'Deploy Foundry Orchestrator'
     dependsOn: DeployWebApp
     environment: '${{ parameters.environment }}'
     strategy:
@@ -139,6 +139,13 @@ stages:
                 docker image push $image
                 if ($LASTEXITCODE -ne 0) { throw 'Failed to push the orchestrator image.' }
 
+                $connectionString = az appconfig credential list --name $names.AppConfig --resource-group $names.ResourceGroup --query "[?name=='Primary'].connectionString" -o tsv
+                if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($connectionString)) {
+                    throw 'Failed to resolve the App Configuration connection string.'
+                }
+                Write-Host "##vso[task.setsecret]$connectionString"
+                $label = '${{ parameters.environment }}'.ToLowerInvariant()
+
                 Write-Host "##[group]Orchestrator Deployment"
                 Write-Host "Image URI: $image"
                 Write-Host "Resource Group: $($names.ResourceGroup)"
@@ -146,7 +153,7 @@ stages:
                 Write-Host "##[endgroup]"
 
                 # Call infrastructure script to configure Foundry deployment
-                & "$(Build.SourcesDirectory)/infrastructure/OrchestratorFoundry.ps1" -ImageUri $image
+                & "$(Build.SourcesDirectory)/infrastructure/OrchestratorFoundry.ps1" -ImageUri $image -ConnectionString $connectionString -Label $label
                 if ($LASTEXITCODE -ne 0) { throw 'Failed to configure orchestrator in Foundry.' }
 
                 Write-Host "Orchestrator deployed to Foundry: $image"
