@@ -68,7 +68,6 @@ if ($null -eq $existingWorkspace) {
         --name $workspace `
         --resource-group $rg `
         --location $location `
-        --kind 'Default' `
         --tags $script:TagArguments `
         --output none
     
@@ -92,3 +91,4 @@ Write-Host ""
 
 
 Write-Host "Azure AI Foundry Workspace is ready."
+
