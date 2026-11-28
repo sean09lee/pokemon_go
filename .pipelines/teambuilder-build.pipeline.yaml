@@ -20,6 +20,9 @@ variables:
   orchestratorArtifactName: 'orchestrator'
 
 steps:
+- script: docker system prune -af --volumes
+  displayName: 'Clean Docker cache (free disk space)'
+
 - task: UseDotNet@2
   displayName: 'Install .NET SDK'
   inputs:
@@ -118,3 +121,4 @@ steps:
   inputs:
     targetPath: '$(Build.ArtifactStagingDirectory)/orchestrator-image.tar'
     artifactName: '$(orchestratorArtifactName)'
+
