@@ -4,6 +4,11 @@
     <File Path="../.pipelines/teambuilder-build.pipeline.yaml" />
     <File Path="../.pipelines/teambuilder-release.pipeline.yaml" />
   </Folder>
+  <Folder Name="/agents/">
+    <File Path="../.github/agents/dev.agent.md" />
+    <File Path="../.github/agents/pm.agent.md" />
+    <File Path="../.github/agents/qa.agent.md" />
+  </Folder>
   <Folder Name="/docs/">
     <File Path="../docs/ai-function-calling.md" />
     <File Path="../docs/app-config-setup.md" />
@@ -13,16 +18,21 @@
   </Folder>
   <Folder Name="/infrastructure/">
     <File Path="../infrastructure/AiFoundry.ps1" />
+    <File Path="../infrastructure/AiFoundryWorkspace.ps1" />
     <File Path="../infrastructure/AppConfiguration.ps1" />
     <File Path="../infrastructure/AppInsights.ps1" />
     <File Path="../infrastructure/AppService.ps1" />
+    <File Path="../infrastructure/FoundryProject.ps1" />
     <File Path="../infrastructure/KeyVault.ps1" />
+    <File Path="../infrastructure/OrchestratorFoundry.ps1" />
     <File Path="../infrastructure/ResourceGroup.ps1" />
     <File Path="../infrastructure/SqlDatabase.ps1" />
     <File Path="../infrastructure/_common.ps1" />
   </Folder>
   <Project Path="../TeamBuilder.AI/TeamBuilder.AI.csproj" />
+  <Project Path="../TeamBuilder.Configurations/TeamBuilder.Configurations.csproj" Id="ede4ab18-7b9c-43c5-b784-48fb7196967c" />
   <Project Path="../TeamBuilder.Data/TeamBuilder.Data.csproj" />
+  <Project Path="../TeamBuilder.Orchestrator/TeamBuilder.Orchestrator.csproj" Id="843ad2f8-bd0d-4d8f-a3e6-52349b5efd22" />
   <Project Path="../TeamBuilder.Services/TeamBuilder.Services.csproj" />
   <Project Path="../TeamBuilder.Tests/TeamBuilder.Tests.csproj" Id="495c7faf-a6ff-4bb8-8dbb-66241e54e290" />
   <Project Path="TeamBuilder.csproj" />

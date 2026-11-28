@@ -66,6 +66,7 @@ function Get-InfraNames {
         SqlAdminUser  = 'teambuilderadmin'
         AiFoundry     = "$Environment-ai-teambuilder$unique"
         AiDeployment  = "$Environment-model-teambuilder$unique"
+        AiProject     = "$Environment-mlws-teambuilder$unique"
     }
 }
 
@@ -177,3 +178,4 @@ function Get-WebAppPrincipalId {
 
     return $principalId
 }
+

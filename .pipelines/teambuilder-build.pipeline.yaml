@@ -15,9 +15,14 @@ variables:
   solutionPath: 'TeamBuilder/TeamBuilder.slnx'
   webProjectPath: 'TeamBuilder/TeamBuilder.csproj'
   testProjectPath: 'TeamBuilder.Tests/TeamBuilder.Tests.csproj'
+  orchestratorProjectPath: 'TeamBuilder.Orchestrator/TeamBuilder.Orchestrator.csproj'
   artifactName: 'teambuilder'
+  orchestratorArtifactName: 'orchestrator'
 
 steps:
+- script: docker system prune -af --volumes
+  displayName: 'Clean Docker cache (free disk space)'
+
 - task: UseDotNet@2
   displayName: 'Install .NET SDK'
   inputs:
@@ -88,3 +93,32 @@ steps:
   inputs:
     targetPath: '$(Build.ArtifactStagingDirectory)/image.tar'
     artifactName: '$(artifactName)'
+
+- task: Docker@2
+  displayName: 'Build Orchestrator Linux container'
+  inputs:
+    command: 'build'
+    repository: 'teambuilder-orchestrator'
+    Dockerfile: '$(Build.SourcesDirectory)/infrastructure/Dockerfile.orchestrator'
+    buildContext: '$(Build.SourcesDirectory)'
+    tags: '$(Build.BuildId)'
+
+- task: PowerShell@2
+  displayName: 'Export orchestrator container'
+  inputs:
+    pwsh: true
+    targetType: 'inline'
+    script: |
+      $ErrorActionPreference = 'Stop'
+      $image = 'teambuilder-orchestrator:$(Build.BuildId)'
+      docker image save --output '$(Build.ArtifactStagingDirectory)/orchestrator-image.tar' $image
+      if ($LASTEXITCODE -ne 0) {
+          throw 'Failed to export the orchestrator container image.'
+      }
+
+- task: PublishPipelineArtifact@1
+  displayName: 'Publish Orchestrator Artifact'
+  inputs:
+    targetPath: '$(Build.ArtifactStagingDirectory)/orchestrator-image.tar'
+    artifactName: '$(orchestratorArtifactName)'
+

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using TeamBuilder.Components;
+using TeamBuilder.Configurations.Extensions;
 using TeamBuilder.Extensions;
 using TeamBuilder.HealthChecks;
 
@@ -9,7 +10,7 @@ var services = builder.Services;
 var configuration = builder.Configuration;
 
 // Add app configuration
-services.AddAppConfiguration(configuration);
+services.AddAppConfiguration(configuration, builder.Environment);
 services.AddApplicationTelemetry(configuration);
 
 // Add services to the container
