@@ -90,20 +90,5 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($workspaceId)) {
 Write-Host "ML Workspace ID: $workspaceId"
 Write-Host ""
 
-# Create the Foundry project (this is the container for agents)
-$projectName = "teambuilder-project"
-Write-Host "Checking Foundry Project '$projectName'..."
 
-# Project creation is typically done through the portal API or az ml project
-# For now, we'll document that this needs to be created in the portal
-Write-Host "NOTE: Foundry projects are created in the Azure AI Foundry portal at https://ai.azure.com/"
-Write-Host "Project name: $projectName"
-Write-Host "Workspace: $workspace (Resource Group: $rg)"
-Write-Host ""
-Write-Host "After running this script, go to https://ai.azure.com/ and:"
-Write-Host "1. Select your Foundry workspace: $workspace"
-Write-Host "2. Click 'Create Project' and name it: $projectName"
-Write-Host "3. The orchestrator will register its agents when deployed"
-Write-Host ""
-
-Write-Host "Azure AI Foundry Workspace is ready for orchestrator deployment."
+Write-Host "Azure AI Foundry Workspace is ready."

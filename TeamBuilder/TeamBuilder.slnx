@@ -18,9 +18,11 @@
   </Folder>
   <Folder Name="/infrastructure/">
     <File Path="../infrastructure/AiFoundry.ps1" />
+    <File Path="../infrastructure/AiFoundryWorkspace.ps1" />
     <File Path="../infrastructure/AppConfiguration.ps1" />
     <File Path="../infrastructure/AppInsights.ps1" />
     <File Path="../infrastructure/AppService.ps1" />
+    <File Path="../infrastructure/FoundryProject.ps1" />
     <File Path="../infrastructure/KeyVault.ps1" />
     <File Path="../infrastructure/OrchestratorFoundry.ps1" />
     <File Path="../infrastructure/ResourceGroup.ps1" />
