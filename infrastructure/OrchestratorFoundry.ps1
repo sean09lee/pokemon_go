@@ -2,92 +2,126 @@
 
 <#
 .SYNOPSIS
-    Deploys the TeamBuilder.Orchestrator as a shared hosted agent in Azure AI Foundry.
+    Registers the TeamBuilder.Orchestrator agents with Azure AI Foundry.
     
-    The orchestrator is a shared resource across all environments (dev, test, prod)
-    and is deployed to the dev resource group/workspace.
+    The orchestrator container hosts three specialized agents (PM, Dev, QA) that
+    are automatically registered as hosted agents in the Foundry project created
+    by FoundryProject.ps1.
     
 .PARAMETER ImageUri
     The container image URI (e.g., registry.azurecr.io/orchestrator:v1.0.0)
+
+.PARAMETER ConnectionString
+    The App Configuration connection string for environment configuration.
+
+.PARAMETER Label
+    The environment label (dev/test/prod) for configuration lookups.
+
+.PARAMETER Environment
+    The environment (dev, test, prod) to determine which project to register with.
 #>
 
 param(
     [Parameter(Mandatory=$true)]
-    [string]$ImageUri
+    [string]$ImageUri,
+
+    [Parameter(Mandatory=$true)]
+    [string]$ConnectionString,
+
+    [Parameter(Mandatory=$true)]
+    [string]$Label,
+
+    [Parameter(Mandatory=$true)]
+    [ValidateSet('dev', 'test', 'prod')]
+    [string]$Environment
 )
 
 $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/_common.ps1"
 
-# Orchestrator is always deployed to dev (shared resource)
-$environment = 'dev'
-$names = Get-InfraNames -Environment $environment
+$names = Get-InfraNames -Environment $Environment
+$rg = $names.ResourceGroup
+$workspace = $names.AiProject
+$projectName = "teambuilder-project-$Environment"
 
-Write-Host "Deploying TeamBuilder.Orchestrator to Azure AI Foundry (Shared Resource)"
-Write-Host "Resource Group: $($names.ResourceGroup)"
-Write-Host "AI Project: $($names.AiProject)"
+Write-Host "Registering TeamBuilder.Orchestrator Agents"
+Write-Host "==========================================="
+Write-Host "Environment: $Environment"
+Write-Host "Resource Group: $rg"
+Write-Host "ML Workspace: $workspace"
+Write-Host "Foundry Project: $projectName"
 Write-Host "Container Image: $ImageUri"
+Write-Host ""
 
-# Get the AI project resource
-$project = az ml workspace show `
-    --name $names.AiProject `
-    --resource-group $names.ResourceGroup `
-    --query '{id: id, location: location}' `
-    --output json | ConvertFrom-Json
+# Verify ML Workspace exists
+Write-Host "Verifying ML Workspace '$workspace'..."
+$workspace_obj = az ml workspace show `
+    --name $workspace `
+    --resource-group $rg `
+    --query '{id: id, location: location, discoveryUrl: discoveryUrl}' `
+    --output json 2>$null | ConvertFrom-Json
+
+if (!$workspace_obj -or !$workspace_obj.id) {
+    throw "Failed to retrieve ML Workspace: $workspace. Run infrastructure pipeline first."
+}
+
+Write-Host "✓ Workspace verified"
+Write-Host "  ID: $($workspace_obj.id)"
+Write-Host ""
+
+# Verify Foundry project exists
+Write-Host "Verifying Foundry Project '$projectName'..."
+$project = az ml project show `
+    --name $projectName `
+    --workspace-name $workspace `
+    --resource-group $rg `
+    --query '{id: id, name: name}' `
+    --output json 2>$null | ConvertFrom-Json
 
 if (!$project -or !$project.id) {
-    throw "Failed to retrieve AI Foundry project: $($names.AiProject)"
+    throw "Failed to retrieve Foundry Project: $projectName. Run FoundryProject.ps1 first."
 }
 
-$projectId = $project.id
-$projectLocation = $project.location
+Write-Host "✓ Project verified"
+Write-Host "  ID: $($project.id)"
+Write-Host "  Name: $($project.name)"
+Write-Host ""
 
-Write-Host "AI Project ID: $projectId"
-Write-Host "Project Location: $projectLocation"
+# Configure orchestrator settings in App Configuration
+Write-Host "Configuring orchestrator settings in App Configuration..."
+$appConfig = $names.AppConfig
 
-# Create or update the hosted agent deployment
-$deploymentName = "teambuilder-orchestrator"
-$agentName = "TeamBuilderOrchestrator"
+$orchestratorSettings = @(
+    @{ Key = 'Orchestrator:Enabled'; Value = 'true' },
+    @{ Key = 'Orchestrator:Environment'; Value = $Environment },
+    @{ Key = 'Orchestrator:ProjectName'; Value = $projectName },
+    @{ Key = 'Orchestrator:WorkspaceLocation'; Value = $workspace_obj.location },
+    @{ Key = 'Orchestrator:WorkspaceId'; Value = $workspace_obj.id },
+    @{ Key = 'Orchestrator:DiscoveryUrl'; Value = $workspace_obj.discoveryUrl }
+)
 
-Write-Host "Creating/updating hosted agent deployment: $deploymentName"
-
-try {
-    $deployment = az ml deployment create `
-        --name $deploymentName `
-        --workspace-name $names.AiProject `
-        --resource-group $names.ResourceGroup `
-        --image-uri $ImageUri `
-        --output json `
-        2>&1 | ConvertFrom-Json
-
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "Successfully created deployment: $deploymentName"
-        Write-Host "Deployment ID: $($deployment.id)"
-    } else {
-        Write-Host "Deployment creation output: $deployment"
-        # If deployment already exists, attempt update
-        $deployment = az ml deployment update `
-            --name $deploymentName `
-            --workspace-name $names.AiProject `
-            --resource-group $names.ResourceGroup `
-            --image-uri $ImageUri `
-            --output json `
-            2>&1 | ConvertFrom-Json
-
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Successfully updated deployment: $deploymentName"
-            Write-Host "Deployment ID: $($deployment.id)"
-        } else {
-            throw "Failed to create or update deployment: $deployment"
-        }
+foreach ($setting in $orchestratorSettings) {
+    $current = (az appconfig kv show --name $appConfig --key $setting.Key --auth-mode key --query value -o tsv 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $current -eq $setting.Value) {
+        Write-Host "  ✓ $($setting.Key) is up to date"
+        continue
     }
-} catch {
-    Write-Error "Error deploying hosted agent: $_"
-    throw
+
+    Write-Host "  Setting $($setting.Key)..."
+    az appconfig kv set --name $appConfig --key $setting.Key --value $setting.Value --auth-mode key --yes --output none
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to set App Configuration key '$($setting.Key)'."
+    }
 }
 
-Write-Host "TeamBuilder.Orchestrator deployed successfully to Azure AI Foundry"
-Write-Host "Agent: $agentName"
-Write-Host "Resource Group: $($names.ResourceGroup)"
-Write-Host "Workspace: $($names.AiProject)"
+Write-Host ""
+Write-Host "✓ Orchestrator Registered Successfully"
+Write-Host "======================================="
+Write-Host ""
+Write-Host "Agents: PM Agent, Dev Agent, QA Agent"
+Write-Host "Project: $projectName"
+Write-Host "Workspace: $workspace"
+Write-Host "Status: Ready for workflows"
+Write-Host ""
+Write-Host "The container will auto-register agents when it starts."

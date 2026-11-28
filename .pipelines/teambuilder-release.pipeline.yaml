@@ -153,7 +153,8 @@ stages:
                 Write-Host "##[endgroup]"
 
                 # Call infrastructure script to configure Foundry deployment
-                & "$(Build.SourcesDirectory)/infrastructure/OrchestratorFoundry.ps1" -ImageUri $image -ConnectionString $connectionString -Label $label
+                & "$(Build.SourcesDirectory)/infrastructure/OrchestratorFoundry.ps1" -ImageUri $image -ConnectionString $connectionString -Label $label -Environment '${{ parameters.environment }}'
                 if ($LASTEXITCODE -ne 0) { throw 'Failed to configure orchestrator in Foundry.' }
 
                 Write-Host "Orchestrator deployed to Foundry: $image"
+

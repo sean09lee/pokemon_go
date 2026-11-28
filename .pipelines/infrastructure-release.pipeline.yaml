@@ -123,3 +123,22 @@ stages:
               arguments: '-Environment ${{ parameters.environment }}'
               failOnStandardError: false
 
+          - task: AzureCLI@2
+            displayName: 'AI Foundry Workspace'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'scriptPath'
+              scriptPath: '$(scriptFolder)/AiFoundryWorkspace.ps1'
+              failOnStandardError: false
+
+          - task: AzureCLI@2
+            displayName: 'Foundry Project'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'pscore'
+              scriptLocation: 'scriptPath'
+              scriptPath: '$(scriptFolder)/FoundryProject.ps1'
+              arguments: '-Environment ${{ parameters.environment }}'
+              failOnStandardError: false
+
